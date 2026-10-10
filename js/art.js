@@ -647,6 +647,19 @@ const SPRITES = {
     ball(p, 13, 3, 1.9, 1.9, GOLD);
     for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) if (Math.hypot(x - 13.9, y - 2.5) <= 1.7) p.set(x, y, '#000000', 0);
   },
+  // atomic clocks in orbit: gold-foil body, solar wings and a dish
+  satellite(p) {
+    const PANEL = ['#1a3a78', '#3a68c8', '#7aa8f0'];
+    slab(p, 1, 6, 5, 10, PANEL); slab(p, 10, 6, 14, 10, PANEL);
+    box(p, 3, 6, 3, 10, '#1a3a78'); box(p, 12, 6, 12, 10, '#1a3a78'); box(p, 1, 8, 5, 8, '#1a3a78'); box(p, 10, 8, 14, 8, '#1a3a78');
+    box(p, 6, 8, 9, 8, '#8a8a98');
+    slab(p, 5, 5, 10, 11, ['#8a5a14', '#c99a2e', '#ffe07a']);
+    clockFace16(p, 7.5, 8, 2.6);
+    ball(p, 7.5, 3.4, 2.6, 1.8, ['#6a6a7a', '#b8b8c8', '#f0f0fa'], 4);
+    dots(p, '#b8b8c8', [[7, 4], [8, 4]]); dots(p, '#ff6a50', [[7, 1]]);
+    box(p, 7, 12, 8, 13, '#8a8a98');
+    dots(p, '#fff0a0', [[1, 2], [14, 3], [3, 13], [13, 12]]);
+  },
   // a domed observatory with a brass telescope
   observatory(p) {
     slab(p, 2, 10, 13, 14, ['#6a6a88', '#9a9ab8', '#c8c8e0']);
@@ -794,6 +807,25 @@ export function rowTex(id) {
       stars(45, 11, 20);
       disc(p, 12, 8, 4, '#f0eac8'); disc(p, 14, 7, 3.3, '#0e1438');
       for (let x = 0; x < W; x++) p.set(x, 24 + Math.round(Math.sin(x * 0.2) * 1.2), '#2a2a44');
+    },
+    satellite() {
+      // deep space above, the Earth's bright edge rising below
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        const d = Math.hypot(x - 30, y - 62);
+        if (d < 40) {
+          const shade = (30 - x) * 0.018 + (62 - y) * 0.01;
+          const land = fb(x + 3, y, 7) > 0.55;
+          const cloud = fb(x * 1.3, y + 9, 9) > 0.62 && bayer(x, y) > 0.35;
+          const base = land ? ['#2a6a30', '#3a8a40', '#5ab05a'] : ['#10357a', '#1a58b0', '#2a7ad8'];
+          p.set(x, y, cloud ? '#e8f2ff' : base[ditherIndex(0.5 + shade, 3, x, y, 0.9)]);
+          if (d > 38) p.set(x, y, '#7ac8ff');
+          else if (d > 37) p.set(x, y, '#4a98e8');
+        } else {
+          p.set(x, y, ['#04061a', '#0a1034', '#101a48'][ditherIndex(0.6 - y / 70, 3, x, y, 1)]);
+        }
+      }
+      stars(45, 23, 18);
+      for (const [cx, cy] of [[10, 6], [46, 10]]) { disc(p, cx, cy, 1.8, '#c99a2e'); disc(p, cx, cy, 1.1, '#f6f2e6'); }
     },
     portal() {
       const pal = ['#0a0618', '#1a0a3a', '#2a1a6a', '#3a2a98', '#2090c0'];

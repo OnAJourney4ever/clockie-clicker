@@ -1,13 +1,14 @@
 // data.js — buildings, upgrades, achievements, syrup flavours, news and changelog.
 
-export const VERSION = '0.3.0';
+export const VERSION = '0.3.1';
 export const START_BANK = 60; // the game starts at 11:59:00 PM
 export const PRICE_GROWTH = 1.15; // Cookie Clicker: price = base * 1.15^owned, rounded up
 export const SELL_RATE = 0.25; // Cookie Clicker refunds 25% of what a building cost
 export const RING_SIZE = 50; // cursors per ring around the clock
 
 // Base costs and production follow Cookie Clicker's table (Farm 1,100 / 8, Mine 12,000 / 47, ...).
-// The Observatory takes the Shipment slot (5.1 billion / 260,000); the Warlock House is the Wizard Tower.
+// The Warlock House is the Wizard Tower, the Satellite is the Shipment (5.1 billion / 260,000) and
+// the Observatory is the Alchemy Lab (75 billion / 1.6 million).
 export const BUILDINGS = [
   {
     id: 'cursor', name: 'Cursor', plural: 'Cursors', base: 15, sps: 0.1,
@@ -51,7 +52,12 @@ export const BUILDINGS = [
     quote: 'The HOA has received several complaints about the space-time continuum.',
   },
   {
-    id: 'observatory', name: 'Observatory', plural: 'Observatories', base: 5100000000, sps: 260000,
+    id: 'satellite', name: 'Satellite', plural: 'Satellites', base: 5100000000, sps: 260000,
+    desc: 'Stores atomic clocks in orbit.',
+    quote: 'Ground control to Major Tick.',
+  },
+  {
+    id: 'observatory', name: 'Observatory', plural: 'Observatories', base: 75000000000, sps: 1600000,
     desc: 'Studies the heavens, and the hours they keep.',
     quote: 'Turns out the universe has terrible time management.',
   },
@@ -144,6 +150,16 @@ const TIERS = {
     ['Moonlit rituals', 'Twice a month, plus overtime.'],
     ['Reality-warping spellbooks', 'Reading may alter your age.'],
     ['HOA exemption', 'Space-time continuum waivers, pre-approved.'],
+  ],
+  satellite: [
+    ['Solar panels', 'Sunlight: free. Seconds: priceless.'],
+    ['Cesium reservoirs', 'Nine billion oscillations a second, and not one of them idle.'],
+    ['Redundant atomic clocks', 'If one is wrong, the other two outvote it.'],
+    ['Geosynchronous orbit', 'Always above you. Never watching. Probably.'],
+    ['Relativity correction', 'Einstein would like a word. He has all the time.'],
+    ['Laser uplink', 'Delivers the time at, well, the speed of light.'],
+    ['Space station dock', 'Check in, check the time, check out.'],
+    ['Constellation network', 'A hundred little clocks, all agreeing on one second.'],
   ],
   observatory: [
     ['Brass telescopes', 'Zoom in on the second.'],
@@ -377,6 +393,14 @@ bld('warlock', ['warlock house', 'warlock houses'], [
   ['Arcane avenue', 'Street parking is, however, a problem.'],
   ['Wizard’s council', 'Chair of the board: a disembodied voice.'],
 ]);
+bld('satellite', ['satellite', 'satellites'], [
+  ['Liftoff', 'Ten, nine, eight... wait, what time is it?'],
+  ['Low Earth orbit', 'Lots of traffic up here, and all of it is punctual.'],
+  ['Space junk', 'Every piece of it is still right on schedule.'],
+  ['Geostationary', 'Fixed overhead. Fixed on time.'],
+  ['Constellation', 'Named after you, eventually.'],
+  ['Swarm', 'The sun is, mildly, inconvenienced.'],
+]);
 bld('observatory', ['observatory', 'observatories'], [
   ['Stargazer', 'Look up. Keep looking up.'],
   ['Night watch', 'Clear skies, tonight and forever.'],
@@ -407,7 +431,7 @@ ladder('variety', 'clock', [
   [3, 'Diversified', 'Do not put all your clocks in one basket.'],
   [5, 'Well-rounded', 'A nice mix of cuckoo and grandfather.'],
   [8, 'Renaissance clock', 'An expert at many things, all of them about time.'],
-  [10, 'Full roster', 'One of everything. For the team photo.'],
+  [11, 'Full roster', 'One of everything. For the team photo.'],
 ], (n) => `Own at least one of <b>${n}</b> different building types.`, (g, c, n) => c.variety >= n);
 ladder('upg', 'bolt', [
   [1, 'Upgrade', 'Plus one. In every possible way.'],
@@ -542,6 +566,11 @@ export function newsPool(g, sps) {
     'HOA fines resident for "unlicensed levitation and a rogue Tuesday."',
     'Spellbook returned to library 300 years late. Fine waived, because time is weird.',
   );
+  if (o.satellite > 0) n.push(
+    'Satellite beams down the exact time; ground crews "feel oddly judged."',
+    'Space agency confirms: the atomic clocks are fine, the astronauts are "about a second older."',
+    'Orbiting clocks report that, up there, "everything is a little faster."',
+  );
   if (o.observatory > 0) n.push(
     'Astronomers discover a new star; it is, they say, "pretty fashionably late."',
     'Telescope turned on neighbor\'s clock tower. "Strictly for science."',
@@ -565,6 +594,15 @@ export function newsPool(g, sps) {
 // changelog
 // ====================================================================
 export const CHANGELOG = [
+  {
+    v: '0.3.1',
+    date: 'October 10, 2026',
+    notes: [
+      'Added the <b>Satellite</b> (5.1 billion seconds, 260,000/s), which stores atomic clocks in orbit. It has eight upgrades, six achievements, and a view of the Earth.',
+      'The <b>Observatory</b> now sits where the Alchemy Lab would: 75 billion seconds, 1.6 million/s.',
+      'The "Full roster" achievement now wants one of all eleven buildings.',
+    ],
+  },
   {
     v: '0.3.0',
     date: 'October 10, 2026',
