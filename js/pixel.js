@@ -159,33 +159,32 @@ export function vnoise(seed) {
   return noise;
 }
 
-// ---------- 3x5 bitmap font ----------
-const FONT = {
-  0: ['010', '101', '101', '101', '010'],
-  1: ['010', '110', '010', '010', '111'],
-  2: ['110', '001', '010', '100', '111'],
-  3: ['110', '001', '010', '001', '110'],
-  4: ['101', '101', '111', '001', '001'],
-  5: ['111', '100', '110', '001', '110'],
-  6: ['011', '100', '110', '101', '010'],
-  7: ['111', '001', '010', '010', '010'],
-  8: ['010', '101', '010', '101', '010'],
-  9: ['010', '101', '011', '001', '110'],
-  C: ['011', '100', '100', '100', '011'],
-  L: ['100', '100', '100', '100', '111'],
-  O: ['010', '101', '101', '101', '010'],
-  K: ['101', '101', '110', '101', '101'],
-  I: ['111', '010', '010', '010', '111'],
-  E: ['111', '100', '110', '100', '111'],
-  '?': ['110', '001', '010', '000', '010'],
-  '!': ['010', '010', '010', '000', '010'],
+// ---------- 5x7 bitmap font ----------
+const G57 = {
+  0: '01110 10001 10011 10101 11001 10001 01110',
+  1: '00100 01100 00100 00100 00100 00100 01110',
+  2: '01110 10001 00001 00010 00100 01000 11111',
+  3: '11110 00001 00001 01110 00001 00001 11110',
+  4: '00010 00110 01010 10010 11111 00010 00010',
+  5: '11111 10000 11110 00001 00001 10001 01110',
+  6: '00110 01000 10000 11110 10001 10001 01110',
+  7: '11111 00001 00010 00100 01000 01000 01000',
+  8: '01110 10001 10001 01110 10001 10001 01110',
+  9: '01110 10001 10001 01111 00001 00010 01100',
+  C: '01110 10001 10000 10000 10000 10001 01110',
+  L: '10000 10000 10000 10000 10000 10000 11111',
+  O: '01110 10001 10001 10001 10001 10001 01110',
+  K: '10001 10010 10100 11000 10100 10010 10001',
+  I: '01110 00100 00100 00100 00100 00100 01110',
+  E: '11111 10000 10000 11110 10000 10000 11111',
 };
-export const textWidth = (s) => s.length * 4 - 1;
+const FONT = Object.fromEntries(Object.entries(G57).map(([k, v]) => [k, v.split(' ')]));
+export const textWidth = (s) => s.length * 6 - 1;
 export function drawText(p, s, x, y, col) {
   for (let i = 0; i < s.length; i++) {
     const g = FONT[s[i]];
     if (!g) continue;
-    for (let r = 0; r < 5; r++) for (let c = 0; c < 3; c++) if (g[r][c] === '1') p.set(x + i * 4 + c, y + r, col);
+    for (let r = 0; r < 7; r++) for (let c = 0; c < 5; c++) if (g[r][c] === '1') p.set(x + i * 6 + c, y + r, col);
   }
 }
 
@@ -253,4 +252,16 @@ export function rotator(src, pivX, pivY, steps = 360, { vote = false } = {}) {
     cache.set(k, hit);
     return hit;
   };
+}
+
+// Doubles a sprite's resolution with Scale2x: diagonals and curves come out smooth instead of
+// blocky, while hard edges stay crisp. Used to take hand-drawn 1x sprites to the 2x art grid.
+export function smooth2x(src) {
+  const w = src.width, h = src.height;
+  const d = new Uint32Array(ctx2d(src).getImageData(0, 0, w, h).data.buffer.slice(0));
+  const r = scale2x(d, w, h);
+  const c = canvas(r.w, r.h), x = ctx2d(c), img = x.createImageData(r.w, r.h);
+  new Uint32Array(img.data.buffer).set(r.d);
+  x.putImageData(img, 0, 0);
+  return c;
 }

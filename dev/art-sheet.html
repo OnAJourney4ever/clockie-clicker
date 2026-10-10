@@ -4,32 +4,39 @@
 </head><body>
 <script type="module">
 import * as ART from '../js/art.js';
-import { upscale } from '../js/pixel.js';
-const q = new URLSearchParams(location.search), k = +(q.get('k') || 4), only = q.get('only');
+import { upscale, canvas } from '../js/pixel.js';
+const q = new URLSearchParams(location.search), k = +(q.get('k') || 3), only = q.get('only');
 const show = (name, c, kk = k) => { if (only && !only.split(',').includes(name)) return; const u = upscale(c, kk); u.title = name; document.body.appendChild(u); };
+const assets = await ART.loadAssets();
 // clock with hands at 10:08:37
 const face = ART.clockFace(), H = ART.clockHands(), cap = ART.clockCap(), glare = ART.clockGlare();
-const clk = document.createElement('canvas'); clk.width = 97; clk.height = 97;
+const R = ART.CLOCK_R, S = R * 2 + 1;
+const clk = canvas(S, S);
 const x = clk.getContext('2d'); x.imageSmoothingEnabled = false;
 x.drawImage(face, 0, 0);
 const T = Math.PI * 2, ang = { h: ((10 + 8 / 60) / 12) * T, m: ((8 + 37 / 60) / 60) * T, s: (37 / 60) * T };
 x.globalAlpha = 0.22;
-for (const [h, a] of [[H.hour, ang.h], [H.minute, ang.m], [H.second, ang.s]]) { const s = h.shadow(a); x.drawImage(s.c, 48 - s.r + 1, 48 - s.r + 1); }
+for (const [h, a] of [[H.hour, ang.h], [H.minute, ang.m], [H.second, ang.s]]) { const s = h.shadow(a); x.drawImage(s.c, R - s.r + 2, R - s.r + 2); }
 x.globalAlpha = 1;
-for (const [h, a] of [[H.hour, ang.h], [H.minute, ang.m], [H.second, ang.s]]) { const s = h.rot(a); x.drawImage(s.c, 48 - s.r, 48 - s.r); }
-x.drawImage(cap, 46, 46); x.drawImage(glare, 0, 0);
-show('clock', clk);
-const cur = ART.cursorRotator();
-const cs = document.createElement('canvas'); cs.width = 120; cs.height = 40; const cx = cs.getContext('2d');
-for (let i = 0; i < 6; i++) { const r = cur(i * 0.5); cx.drawImage(r.c, 4 + i * 19 - r.r + 8, 20 - r.r); }
-show('cursors', cs);
-const d = ART.doctorSprites(); show('doctor', d.idle, 6); show('blink', d.blink, 6);
-const ic = ART.storeIcons(); show('iconCursor', ic.cursor, 5); show('iconDoctor', ic.doctor, 5);
-show('hospital', ART.hospitalTex(), 3);
-['hand', 'hourglass', 'bolt', 'cursor', 'doctor', 'clock', 'heart', 'moon'].forEach((g, i) => show('ach-' + g, ART.achievementIcon(g, i % 9), 4));
-show('ach-locked', ART.achievementIcon('clock', 0, true), 4);
-show('bg', ART.bgTile(), 3); show('plank', ART.plankTex(), 3); show('dark', ART.darkWoodTex(), 3);
-show('woodv', ART.woodTex(6, 48, { seed: 3, vertical: true, bevel: true }), 4);
-show('close', ART.closeIcon(), 5); show('fav', ART.favicon(), 6);
+for (const [h, a] of [[H.hour, ang.h], [H.minute, ang.m], [H.second, ang.s]]) { const s = h.rot(a); x.drawImage(s.c, R - s.r, R - s.r); }
+x.drawImage(cap, R - 6, R - 6); x.drawImage(glare, 0, 0);
+show('clock', clk, k);
+const rot = ART.handRotator(assets.hand);
+const cs = canvas(220, 70), cx = cs.getContext('2d');
+for (let i = 0; i < 8; i++) { const r = rot(i * 0.8); cx.drawImage(r.c, 20 + i * 26 - r.r, 35 - r.r); }
+show('hands', cs, k);
+show('handraw', assets.hand, 8);
+show('arrow', ART.cursorSprite(), 8);
+show('nurse', ART.nurseSprite(), 6);
+const ic = ART.storeIcons(assets.hand); show('iconCursor', ic.cursor, 4); show('iconNurse', ic.nurse, 4);
+show('hospital', ART.hospitalTex(), 2);
+['hand', 'hourglass', 'bolt', 'cursor', 'nurse', 'clock', 'heart', 'moon'].forEach((g, i) => show('ach-' + g, ART.achievementIcon(g, i % 9), 3));
+show('ach-locked', ART.achievementIcon('clock', 0, true), 3);
+show('bg', ART.bgTile(), 2); show('plank', ART.plankTex(), 2); show('dark', ART.darkWoodTex(), 2);
+show('woodv', ART.woodTex(12, 96, { seed: 3, vertical: true, bevel: true }), 3);
+show('close', ART.closeIcon(), 4); show('fav', ART.favicon(), 6);
+show('jar', ART.syrupJar('#c4651a', 56), 6);
+show('jar2', ART.syrupJar('#4656c8', 12), 6);
+show('jar3', ART.syrupJar('#e0466a', 96), 6);
 </script>
 </body></html>

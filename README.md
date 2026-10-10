@@ -21,18 +21,18 @@ Then open http://localhost:5173. Art preview sheet: `/dev/art-sheet.html`.
   The clock eats one second every second; clicking it gives one back.
 - **Buildings** follow Cookie Clicker's pricing: `price = ceil(base × 1.15^owned)`,
   bulk buys sum the series, selling refunds 25%.
-  - Cursor: 15 s, winds back 0.1 s/s. They orbit the clock in rings of 50.
-  - Doctor: 90 s, winds back 1 s/s. They get their own ward in the middle panel.
+  - Cursor: 15 s, winds back 0.1 s/s. Pointing hands (assets/hand.png) orbit the clock in rings of 50; the arrow is for clicking.
+  - Nurse: 90 s, winds back 1 s/s. Each has an ordinary name, and they get their own ward in the middle panel.
 - **Achievements** fill the **Syrup** by 4% each; every 25 pours a new flavor.
 - The clock only ticks while the tab is visible. Saves go to `localStorage`.
 
-Console: `Clockie.state`, `Clockie.give(seconds)`, `Clockie.setOwned('doctor', 10)`.
+Console: `Clockie.state`, `Clockie.give(seconds)`, `Clockie.setOwned('nurse', 10)`.
 
 ## Layout
 
 | file | what |
 | --- | --- |
 | `js/pixel.js` | pixel buffers, sprites, noise, dithering, 3x5 font, rotation |
-| `js/art.js` | clock, hands, cursor, nurse, icons, wood and wallpaper textures |
+| `js/art.js` | clock, clock hands, hand-cursor rotation, nurse, syrup jar, icons, wood and wallpaper textures |
 | `js/data.js` | buildings, achievements, syrup flavors, news, changelog |
 | `js/game.js` | state, loop, rendering, store, menus, saving |

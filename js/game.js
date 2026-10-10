@@ -1,9 +1,9 @@
 // game.js — Clockie Clicker: state, simulation, rendering and UI.
 import * as ART from './art.js';
-import { upscale, ctx2d, canvas, bayer, mix, rgba, rng } from './pixel.js';
+import { upscale, ctx2d, canvas, bayer, mix, rgba, rng, silhouette } from './pixel.js';
 import {
   VERSION, START_BANK, PRICE_GROWTH, SELL_RATE, RING_SIZE, BUILDINGS, ACHIEVEMENTS,
-  FLAVORS, ACH_PER_FLAVOR, SYRUP_PER_ACH, syrupState, newsPool, CHANGELOG,
+  FLAVORS, ACH_PER_FLAVOR, SYRUP_PER_ACH, syrupState, newsPool, CHANGELOG, randomName,
 } from './data.js';
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -19,6 +19,7 @@ const freshRun = () => ({
   owned: Object.fromEntries(BUILDINGS.map((b) => [b.id, 0])),
   made: Object.fromEntries(BUILDINGS.map((b) => [b.id, 0])),
   dip3: false, dip1: false, saved3: false, saved1: false,
+  names: [],
 });
 const freshState = () => ({
   version: VERSION,
@@ -84,13 +85,13 @@ const shownBank = () => Math.max(0, Math.ceil(S.run.bank - 1e-9));
 // ====================================================================
 // pixel scale & textures
 // ====================================================================
-let DEV_PX = 3, PX = 3;
+// The art grid is twice as fine as v0.1: one art pixel is 1.5 CSS px (1 on small screens).
+let DEV_PX = 2, PX = 1.5;
 function computeScale() {
   const dpr = window.devicePixelRatio || 1;
-  const base = innerWidth < 1150 ? 2 : 3;
-  DEV_PX = Math.max(1, Math.round(base * dpr));
-  PX = DEV_PX / dpr;
-  root.setProperty('--px', PX + 'px');
+  PX = innerWidth < 1150 ? 1 : 1.5;
+  DEV_PX = Math.max(1, Math.round(PX * dpr)); // integer factor used when baking textures
+  root.setProperty('--px', PX * 2 + 'px'); // CSS borders and icon sizes are measured in 2-pixel units
 }
 const urlCache = new Map();
 function texURL(key, make) {
@@ -105,8 +106,8 @@ function bakeTextures() {
     root.setProperty(`--tex-${name}-size`, `${c.width * PX}px ${c.height * PX}px`);
   };
   set('bg', ART.bgTile);
-  set('wood-v', () => ART.woodTex(6, 48, { seed: 3, vertical: true, bevel: true }));
-  set('wood-h', () => ART.woodTex(48, 4, { seed: 9, vertical: false, bevel: true }));
+  set('wood-v', () => ART.woodTex(12, 96, { seed: 3, vertical: true, bevel: true }));
+  set('wood-h', () => ART.woodTex(96, 8, { seed: 9, vertical: false, bevel: true }));
   set('plank', ART.plankTex);
   set('darkwood', ART.darkWoodTex);
   root.setProperty('--tex-close', `url(${texURL('close', ART.closeIcon)})`);
@@ -114,15 +115,17 @@ function bakeTextures() {
 }
 
 const ART_CACHE = {};
-function loadArt() {
+function loadArt(assets) {
   ART_CACHE.face = ART.clockFace();
   ART_CACHE.glare = ART.clockGlare();
   ART_CACHE.hands = ART.clockHands();
   ART_CACHE.cap = ART.clockCap();
-  ART_CACHE.cursor = ART.cursorRotator();
-  ART_CACHE.doc = ART.doctorSprites();
+  ART_CACHE.hand = ART.handRotator(assets.hand); // the pointing hand: a real image, rotated by RotSprite
+  ART_CACHE.nurse = ART.nurseSprite();
+  const nd = ctx2d(ART_CACHE.nurse).getImageData(0, 0, ART_CACHE.nurse.width, ART_CACHE.nurse.height).data;
+  ART_CACHE.nurseMask = Uint8Array.from({ length: nd.length / 4 }, (_, i) => (nd[i * 4 + 3] > 127 ? 1 : 0));
   ART_CACHE.hospital = ART.hospitalTex();
-  ART_CACHE.icons = ART.storeIcons();
+  ART_CACHE.icons = ART.storeIcons(assets.hand);
 }
 const iconURL = (id) => texURL('icon-' + id, () => ART_CACHE.icons[id]);
 const coinURL = () => texURL('coin', ART.currencyIcon);
@@ -165,7 +168,8 @@ function sfx(type) {
 // ====================================================================
 const left = $('#left'), cv = $('#clockCanvas'), cx = ctx2d(cv);
 const L = { W: 0, H: 0, ccx: 0, ccy: 0 };
-const RR = 86;
+const K = ART.K;
+const RR = 86 * K;
 const rayCv = canvas(RR * 2 + 1, RR * 2 + 1), rayX = ctx2d(rayCv), rayImg = rayX.createImageData(RR * 2 + 1, RR * 2 + 1);
 let syrupCv = canvas(1, 1), syrupX = ctx2d(syrupCv), syrupImg = null;
 let press = 0, hoverClock = false;
@@ -180,7 +184,7 @@ function sizeLeft() {
   cv.style.height = L.H * PX + 'px';
   const counterBottom = ($('#counter').offsetTop + $('#counter').offsetHeight) / PX;
   L.ccx = Math.floor(L.W / 2);
-  L.ccy = Math.max(Math.round(counterBottom + 70), Math.floor(L.H * 0.5));
+  L.ccy = Math.max(Math.round(counterBottom + 70 * K), Math.floor(L.H * 0.5));
   syrupCv = canvas(L.W, Math.ceil(L.H * 0.4));
   syrupX = ctx2d(syrupCv);
   syrupImg = syrupX.createImageData(syrupCv.width, syrupCv.height);
@@ -191,7 +195,7 @@ function drawRays(t) {
   d.fill(0);
   for (let y = 0; y < S2; y++) for (let x = 0; x < S2; x++) {
     const dx = x - RR, dy = y - RR, dist = Math.hypot(dx, dy);
-    if (dist > RR || dist < 30) continue;
+    if (dist > RR || dist < 30 * K) continue;
     const a = Math.atan2(dy, dx) + t * 0.12;
     const band = (((a / (Math.PI * 2)) * 14) % 1 + 1) % 1 < 0.5;
     const fall = 1 - dist / RR;
@@ -216,9 +220,7 @@ function drawSyrup(t) {
   const put = (x, y, c, a = 235) => { const o = (y * w + x) * 4; d[o] = c[0]; d[o + 1] = c[1]; d[o + 2] = c[2]; d[o + 3] = a; };
   for (let x = 0; x < w; x++) {
     // slow, heavy swell: syrup is thick
-    const dxs = Math.abs(x - L.ccx);
-    const ripple = dxs < 2 ? -1 : dxs < 9 && Math.floor(t * 8 - dxs * 0.7) % 3 === 0 ? -1 : 0;
-    const s = Math.round(h - level + Math.sin(x * 0.08 + t * 1.2) * 0.9 + Math.sin(x * 0.027 - t * 0.6) * 1.1) + ripple;
+    const s = Math.round(h - level + Math.sin(x * 0.04 + t * 1.2) * 1.4 + Math.sin(x * 0.0135 - t * 0.6) * 1.8);
     for (let y = Math.max(0, s); y < h; y++) {
       const dd = y - s;
       let c;
@@ -229,7 +231,7 @@ function drawSyrup(t) {
         const band = f < 0.45 ? 0 : f < 0.6 ? (bayer(x, y) < (f - 0.45) / 0.15 ? 1 : 0) : f < 0.85 ? 1 : (bayer(x, y) < (f - 0.85) / 0.15 ? 2 : 1);
         c = shades[2 + band];
         // long lazy streaks drifting to the right
-        if (dd % 7 === 3 && (((x - Math.floor(t * 6) + dd * 11) % 41) + 41) % 41 < 7) c = streak;
+        if (dd % 13 === 6 && (((x - Math.floor(t * 12) + dd * 11) % 82) + 82) % 82 < 14) c = streak;
         if (idx === FLAVORS.length - 1 && ((x * 7919 + y * 104729 + Math.floor(t * 2)) % 211) === 0) c = [255, 255, 255];
       }
       put(x, y, c, dd === 0 ? 255 : 240);
@@ -254,56 +256,43 @@ function renderLeft(t, dt) {
     if (rayTimer <= 0) { drawRays(t); rayTimer = 1 / 30; }
     cx.drawImage(rayCv, ccx - RR, ccy - RR);
   }
-  // a thin stream of syrup seeps from the base of the clock down into the pool
-  {
-    const { flavor } = syrupState(achCount());
-    const lite = mix(flavor.color, '#ffffff', 0.35), dark = mix(flavor.color, '#000000', 0.25);
-    const top = ccy + ART.CLOCK_R - 2, bottom = L.H - syrupLevel() + 1;
-    const wide = achCount() >= 5;
-    for (let y = top; y < bottom; y++) {
-      const glint = ((y - Math.floor(t * 18)) % 7 + 7) % 7 === 0;
-      cx.fillStyle = glint ? lite : flavor.color;
-      cx.fillRect(ccx, y, 1, 1);
-      if (wide) { cx.fillStyle = glint ? flavor.color : dark; cx.fillRect(ccx + 1, y, 1, 1); }
-    }
-  }
-  // cursors orbit in rings of 50, each poking the clock once every 10 seconds
+  // pointing hands orbit in rings of 50, each poking the clock once every 10 seconds.
+  // Outer rings are drawn first so the inner ring overlaps them.
   const n = Math.min(S.run.owned.cursor, RING_SIZE * 4);
-  for (let i = 0; i < n; i++) {
+  for (let i = n - 1; i >= 0; i--) {
     const ring = Math.floor(i / RING_SIZE), j = i % RING_SIZE;
     const ang = (j / RING_SIZE) * Math.PI * 2 + t * 0.05 * (ring % 2 ? -1 : 1) + ring * 0.031;
     const local = (((t + (j / RING_SIZE) * 10) % 10) + 10) % 10;
-    const poke = local < 0.3 ? Math.sin((local / 0.3) * Math.PI) * 3 : 0;
-    const rTip = 52 + ring * 11 - poke;
+    const poke = local < 0.3 ? Math.sin((local / 0.3) * Math.PI) * 3 * K : 0;
+    const rTip = ART.CLOCK_R + 8 + ring * 22 - poke;
     const px = ccx + Math.sin(ang) * rTip, py = ccy - Math.cos(ang) * rTip;
-    const rot = Math.atan2(ccy - py, ccx - px) - ART.CURSOR_AIM;
-    const spr = ART_CACHE.cursor(rot);
+    const spr = ART_CACHE.hand(Math.atan2(ccx - px, py - ccy)); // the sprite points up; aim the fingertip at the clock
     cx.drawImage(spr.c, Math.round(px) - spr.r, Math.round(py) - spr.r);
   }
   // the clock itself
-  const pY = press > 0 ? 1 : 0;
+  const pY = press > 0 ? 2 : 0;
   const R = ART.CLOCK_R;
   cx.drawImage(ART_CACHE.face, ccx - R, ccy - R + pY);
   const ang = handAngles(), H = ART_CACHE.hands;
   cx.globalAlpha = 0.22;
   for (const [hand, a] of [[H.hour, ang.h], [H.minute, ang.m], [H.second, ang.s]]) {
     const sh = hand.shadow(a);
-    cx.drawImage(sh.c, ccx - sh.r + 1, ccy - sh.r + 1 + pY);
+    cx.drawImage(sh.c, ccx - sh.r + 2, ccy - sh.r + 2 + pY);
   }
   cx.globalAlpha = 1;
   for (const [hand, a] of [[H.hour, ang.h], [H.minute, ang.m], [H.second, ang.s]]) {
     const sp = hand.rot(a);
     cx.drawImage(sp.c, ccx - sp.r, ccy - sp.r + pY);
   }
-  cx.drawImage(ART_CACHE.cap, ccx - 2, ccy - 2 + pY);
+  cx.drawImage(ART_CACHE.cap, ccx - 6, ccy - 6 + pY);
   cx.drawImage(ART_CACHE.glare, ccx - R, ccy - R + pY);
   // particles
   for (let i = particles.length - 1; i >= 0; i--) {
     const p = particles[i];
-    p.life -= dt; p.vy += 160 * dt; p.x += p.vx * dt; p.y += p.vy * dt;
+    p.life -= dt; p.vy += 160 * K * dt; p.x += p.vx * dt; p.y += p.vy * dt;
     if (p.life <= 0) { particles.splice(i, 1); continue; }
     cx.fillStyle = p.col;
-    cx.fillRect(Math.round(p.x), Math.round(p.y), 1, 1);
+    cx.fillRect(Math.round(p.x), Math.round(p.y), 2, 2);
   }
   // syrup flowing beneath the clock
   drawSyrup(t);
@@ -317,9 +306,19 @@ function artPos(e) {
 }
 const onClock = (p) => Math.hypot(p.x - (L.ccx + 0.5), p.y - (L.ccy + 0.5)) <= ART.CLOCK_R + 0.5;
 
+// the arrow is the clicking cursor: it replaces the mouse pointer while hovering the clock
+let arrowCursorURL = null;
+function arrowCursor() {
+  if (!arrowCursorURL) {
+    const c = canvas(24, 42);
+    ctx2d(c).drawImage(ART.cursorSprite(), 0, 0, 24, 42);
+    arrowCursorURL = c.toDataURL();
+  }
+  return `url(${arrowCursorURL}) 0 0, pointer`;
+}
 cv.addEventListener('pointermove', (e) => {
   hoverClock = onClock(artPos(e));
-  cv.style.cursor = hoverClock ? 'pointer' : 'default';
+  cv.style.cursor = hoverClock ? arrowCursor() : 'default';
 });
 cv.addEventListener('pointerdown', (e) => {
   const p = artPos(e);
@@ -343,7 +342,7 @@ function clickClock(p) {
   if (S.opts.particles) {
     const cols = ['#ffe9a0', '#c99a2e', '#ffffff', '#cc8445'];
     for (let i = 0; i < 6; i++) particles.push({
-      x: p.x, y: p.y, vx: (Math.random() - 0.5) * 70, vy: -30 - Math.random() * 50,
+      x: p.x, y: p.y, vx: (Math.random() - 0.5) * 70 * K, vy: (-30 - Math.random() * 50) * K,
       life: 0.5 + Math.random() * 0.4, col: cols[i % cols.length],
     });
   }
@@ -355,8 +354,20 @@ function clickClock(p) {
 // ====================================================================
 const rowsEl = $('#rows');
 let rowCanvases = [];
-const ROW_H = 34;
+const ROW_H = 64;
+const NURSE_STEP = 22;
+let nurseHover = null; // { b: 'nurse', i: index }
+
+// every nurse gets a perfectly ordinary name, remembered in the save
+function syncNames() {
+  const r = S.run, want = Math.min(r.owned.nurse || 0, 200);
+  r.names = Array.isArray(r.names) ? r.names : [];
+  while (r.names.length < want) r.names.push(randomName(r.names));
+  r.names.length = want;
+}
+
 function buildRows() {
+  syncNames();
   rowsEl.querySelectorAll('.bRow, .rowWood').forEach((n) => n.remove());
   rowCanvases = [];
   const W = Math.ceil(rowsEl.clientWidth / PX);
@@ -371,34 +382,76 @@ function buildRows() {
     const wood = document.createElement('div');
     wood.className = 'rowWood';
     rowsEl.append(row, wood);
-    rowCanvases.push({ b, c, x: ctx2d(c) });
+    const entry = { b, c, x: ctx2d(c), items: [] };
+    rowCanvases.push(entry);
+    c.addEventListener('pointermove', (e) => {
+      const r = c.getBoundingClientRect();
+      const hit = nurseAt(entry, (e.clientX - r.left) / PX, (e.clientY - r.top) / PX);
+      const next = hit ? { b: b.id, i: hit.i } : null;
+      c.style.cursor = hit ? 'pointer' : 'default';
+      if (hit) {
+        const name = S.run.names[hit.i] || 'Nurse';
+        tipFor = { kind: 'html', ev: e, html: `<div class="tHead"><img src="${iconURL('nurse')}" alt=""><div><div class="tName">${name}</div><div class="tSub">Nurse</div></div></div>
+          <div class="line"></div><div>Winds back <b>1 second</b> per second.</div>` };
+        showTip(e);
+      } else hideTip();
+      if (next?.i !== nurseHover?.i) { nurseHover = next; drawRows(); }
+    });
+    c.addEventListener('pointerleave', () => { nurseHover = null; hideTip(); drawRows(); });
   }
   $('#rowsEmpty').hidden = rowCanvases.length > 0;
 }
 
 const hash = (i) => { const r = rng(i * 9973 + 17); return r(); };
-function drawRows(t) {
-  for (const { b, c, x } of rowCanvases) {
+
+// topmost nurse under an art-pixel position (transparent pixels don't count)
+function nurseAt(row, ax, ay) {
+  const spr = ART_CACHE.nurse;
+  for (let k = row.items.length - 1; k >= 0; k--) {
+    const it = row.items[k], lx = Math.floor(ax - it.x), ly = Math.floor(ay - it.y);
+    if (lx < 0 || ly < 0 || lx >= spr.width || ly >= spr.height) continue;
+    if (ART_CACHE.nurseMask[ly * spr.width + lx]) return it;
+  }
+  return null;
+}
+
+function drawRows() {
+  for (const row of rowCanvases) {
+    const { b, c, x } = row;
     const tex = ART_CACHE.hospital;
     for (let ox = 0; ox < c.width; ox += tex.width) x.drawImage(tex, ox, 0);
-    if (b.id !== 'doctor') continue;
-    const cap = Math.max(1, Math.floor((c.width - 8) / 11));
-    const n = Math.min(S.run.owned.doctor, cap);
-    // back row (odd) first, then the front row overlaps it
+    if (b.id !== 'nurse') continue;
+    const spr = ART_CACHE.nurse;
+    const cap = Math.max(1, Math.floor((c.width - 16) / NURSE_STEP));
+    const n = Math.min(S.run.owned.nurse, cap);
+    // back row (odd) first, then the front row overlaps it. Nurses never move on their own.
     const order = [...Array(n).keys()].sort((a, bb) => (bb % 2) - (a % 2) || a - bb);
+    row.items = [];
     for (const i of order) {
-      const h = hash(i);
       const back = i % 2 === 1;
-      const feet = back ? 29 : 32;
-      const bob = Math.floor(t * 1.6 + h * 7) % 2 === 0 ? 0 : -1;
-      const blink = ((t + h * 13) % 4.3) < 0.14;
-      const spr = blink ? ART_CACHE.doc.blink : ART_CACHE.doc.idle;
-      const dx = 3 + i * 11 + Math.floor(h * 3);
-      x.globalAlpha = 0.3;
+      const feet = back ? 54 : 60;
+      const dx = 8 + i * NURSE_STEP + Math.floor(hash(i) * 5);
+      const hot = nurseHover && nurseHover.b === b.id && nurseHover.i === i;
+      const y = feet - spr.height - (hot ? 4 : 0);
+      row.items.push({ i, x: dx, y });
+      x.globalAlpha = hot ? 0.18 : 0.3;
       x.fillStyle = '#000';
-      x.fillRect(dx + 3, feet - 1, 10, 1);
+      x.fillRect(dx + 6, feet - 2, 20, 2);
       x.globalAlpha = 1;
-      x.drawImage(spr, dx, feet - spr.height + bob);
+      if (hot) {
+        // soft pale outline behind the sprite
+        const out = silhouette(spr, '#fff6c8');
+        for (const [ox, oy] of [[-2, 0], [2, 0], [0, -2], [0, 2]]) x.drawImage(out, dx + ox, y + oy);
+      }
+      x.drawImage(spr, dx, y);
+      if (hot) {
+        // brightening pass
+        x.globalCompositeOperation = 'lighter';
+        x.globalAlpha = 0.22;
+        x.drawImage(spr, dx, y);
+        x.globalAlpha = 1;
+        x.globalCompositeOperation = 'source-over';
+      }
     }
   }
 }
@@ -586,7 +639,7 @@ function renderMenu() {
       <div id="statsGeneral"></div>
       <div class="subTitle">Syrup</div>
       <div class="syrupBox">
-        <div class="syrupJar"><div class="syrupFill" style="height:${Math.max(4, syr.progress)}%;background:${flav.color}"></div></div>
+        <img class="syrupJar" src="${texURL(`jar-${flav.color}-${syr.progress}`, () => ART.syrupJar(flav.color, syr.progress))}" width="${48 * PX * 2}" height="${64 * PX * 2}" alt="">
         <div>
           <div class="listing"><b>${flav.name}</b> <small>(flavor ${syr.idx + 1} of ${FLAVORS.length})</small></div>
           <div class="listing menuNote">${flav.desc}</div>
@@ -637,7 +690,7 @@ function renderMenu() {
       <div class="menuTitle">Info</div>
       <div class="subTitle">About</div>
       <div class="listing">It is one minute to midnight. Click the clock to wind its second hand back.
-        Spend the time you've saved on cursors and doctors, who'll wind it back for you.</div>
+        Spend the time you've saved on cursors and nurses, who'll wind it back for you.</div>
       <div class="listing">If the clock ever strikes midnight, you die. Don't let it strike midnight.</div>
       <div class="listing menuNote">The clock only ticks while you're watching it.</div>
       <div class="listing"><small>Clockie Clicker v${VERSION}. Inspired by <i>Cookie Clicker</i> by Orteil.</small></div>
@@ -721,7 +774,7 @@ function overlay(html, btnLabel, onGo) {
   $('#overlay').hidden = false;
   $('#overlayGo').onclick = () => { $('#overlay').hidden = true; onGo(); };
 }
-function clockImg() { return `<img src="${texURL('faceBig', () => ART_CACHE.face)}" width="${97 * PX}" height="${97 * PX}" alt="">`; }
+function clockImg() { const w = (ART.CLOCK_R * 2 + 1) * PX; return `<img src="${texURL('faceBig', () => ART_CACHE.face)}" width="${w}" height="${w}" alt="">`; }
 
 function startOverlay() {
   if (!S.started) {
@@ -824,7 +877,7 @@ function frame(now) {
   slow -= dt;
   if (slow <= 0) {
     slow = 0.1;
-    drawRows(t);
+    drawRows();
     refreshStore();
     if (tipFor?.kind === 'building') showTip();
   }
@@ -842,11 +895,11 @@ function rebuildAll() {
 // ====================================================================
 // boot
 // ====================================================================
-function boot() {
+async function boot() {
   load();
   computeScale();
   bakeTextures();
-  loadArt();
+  loadArt(await ART.loadAssets());
   $('#topVersion').textContent = 'v' + VERSION;
   rebuildAll();
   rotateNews();

@@ -1,6 +1,6 @@
 // data.js — buildings, achievements, syrup flavours, news and changelog.
 
-export const VERSION = '0.1.0';
+export const VERSION = '0.2.0';
 export const START_BANK = 60; // the game starts at 11:59:00 PM
 export const PRICE_GROWTH = 1.15; // Cookie Clicker: price = base * 1.15^owned, rounded up
 export const SELL_RATE = 0.25; // Cookie Clicker refunds 25% of what a building cost
@@ -16,8 +16,8 @@ export const BUILDINGS = [
     quote: 'It points at the clock. The clock, unnerved, loses a little time.',
   },
   {
-    id: 'doctor',
-    name: 'Doctor',
+    id: 'nurse',
+    name: 'Nurse',
     base: 90,
     sps: 1,
     desc: 'Adds one second to your life every second.',
@@ -36,7 +36,7 @@ const add = (id, name, desc, glyph, tier, check) => A.push({ id, name, desc, gly
  [1000, 'Clockwork fingers', 'Click the clock <b>1,000</b> times.'],
  [10000, 'Repetitive strain', 'Click the clock <b>10,000</b> times.'],
  [100000, 'Carpal tunnel vision', 'Click the clock <b>100,000</b> times.'],
-].forEach(([n, name, desc], i) => add('click' + n, name, desc, 'hand', i, (g) => g.all.clicks >= n));
+].forEach(([n, name, desc], i) => add('click' + n, name, desc, 'cursor', i, (g) => g.all.clicks >= n));
 
 [[MIN, 'Borrowed time', 'Wind back <b>1 minute</b> in total.'],
  [HOUR, 'Overtime', 'Wind back <b>1 hour</b> in total.'],
@@ -62,15 +62,15 @@ const add = (id, name, desc, glyph, tier, check) => A.push({ id, name, desc, gly
  [50, 'Full circle', 'Have <b>50</b> cursors, a complete ring around the clock.'],
  [100, 'Second ring', 'Have <b>100</b> cursors.'],
  [200, 'Lord of the rings', 'Have <b>200</b> cursors.'],
-].forEach(([n, name, desc], i) => add('cursor' + n, name, desc, 'cursor', i, (g) => g.run.owned.cursor >= n));
+].forEach(([n, name, desc], i) => add('cursor' + n, name, desc, 'hand', i, (g) => g.run.owned.cursor >= n));
 
-[[1, 'Second opinion', 'Have <b>1</b> doctor.'],
- [5, 'House call', 'Have <b>5</b> doctors.'],
- [10, 'Night shift', 'Have <b>10</b> doctors.'],
- [25, 'Residency', 'Have <b>25</b> doctors.'],
- [50, 'Teaching hospital', 'Have <b>50</b> doctors.'],
- [100, 'Board certified', 'Have <b>100</b> doctors.'],
-].forEach(([n, name, desc], i) => add('doctor' + n, name, desc, 'doctor', i, (g) => g.run.owned.doctor >= n));
+[[1, 'Second opinion', 'Have <b>1</b> nurse.'],
+ [5, 'House call', 'Have <b>5</b> nurses.'],
+ [10, 'Night shift', 'Have <b>10</b> nurses.'],
+ [25, 'Residency', 'Have <b>25</b> nurses.'],
+ [50, 'Teaching hospital', 'Have <b>50</b> nurses.'],
+ [100, 'Board certified', 'Have <b>100</b> nurses.'],
+].forEach(([n, name, desc], i) => add('nurse' + n, name, desc, 'nurse', i, (g) => g.run.owned.nurse >= n));
 
 add('bank300', 'Five more minutes', 'Have <b>5 minutes</b> on the clock at once.', 'clock', 0, (g) => g.run.bank >= 5 * MIN);
 add('bank3600', 'Sleeping in', 'Have <b>1 hour</b> on the clock at once.', 'clock', 1, (g) => g.run.bank >= HOUR);
@@ -125,13 +125,13 @@ export function newsPool(g, sps) {
     'Mouse-pointer union demands breaks; told breaks "would take time."',
   );
   if (g.run.owned.cursor >= 50) n.push('A complete ring of cursors now orbits the clock. Astronomers are furious.');
-  if (g.run.owned.doctor > 0) n.push(
-    'Hospitals report nurse shortage; all of them were last seen standing near a clock.',
-    'Doctor prescribes "two seconds, twice daily."',
+  if (g.run.owned.nurse > 0) n.push(
+    'Hospitals report staffing shortage; all missing nurses last seen standing near a clock.',
+    'Nurse prescribes "two seconds, twice daily."',
     'New study: a second a day keeps midnight away.',
     'Nurses\' union demands overtime pay, is told overtime "doesn\'t exist anymore."',
   );
-  if (g.run.owned.doctor >= 10) n.push('"We\'re not even sure what we\'re treating," admits head nurse. "But it\'s working."');
+  if (g.run.owned.nurse >= 10) n.push('"We\'re not even sure what we\'re treating," admits head nurse. "But it\'s working."');
   if (g.run.bank < 15) n.push('URGENT: midnight imminent. Citizens advised to click.', 'Experts recommend "clicking the clock, like, right now."');
   if (sps >= 1) n.push('Clock appears to be running backwards. Owners describe it as "fine, actually."');
   if (g.run.bank >= 3600) n.push('Bedtime postponed indefinitely. Children rejoice.');
@@ -142,15 +142,37 @@ export function newsPool(g, sps) {
 
 export const CHANGELOG = [
   {
+    v: '0.2.0',
+    date: 'October 10, 2026',
+    notes: [
+      'Cursors are now a pointing <b>hand</b>, drawn as a real image, and it is the hand that orbits the clock. The arrow is for clicking.',
+      '<b>Doctors</b> are now <b>Nurses</b>, and each has a perfectly ordinary name.',
+      'Nurses and other structures stay put in their rows. Hover one to lift and highlight it.',
+      'The art grid is twice as fine. Still pixelated, but not nearly as grainy.',
+      'The syrup stopped pouring and just flows. The jar in Stats has seen some things.',
+    ],
+  },
+  {
     v: '0.1.0',
     date: 'October 10, 2026',
     notes: [
       'The clock is ticking. It is one minute to midnight.',
       'Click the clock to wind its second hand back.',
-      'Added <b>Cursors</b> (15 seconds, 0.1/s) and <b>Doctors</b> (90 seconds, 1/s). Prices grow 15% per purchase, like you\'d expect.',
-      'Cursors circle the clock in rings of 50. Doctors get their own ward.',
+      'Added <b>Cursors</b> (15 seconds, 0.1/s) and <b>Doctors</b> (90 seconds, 1/s; since renamed Nurses). Prices grow 15% per purchase, like you\'d expect.',
+      'Cursors circle the clock in rings of 50. Doctors got their own ward.',
       'Added 38 achievements, statistics and <b>Syrup</b>, which seeps out beneath the clock.',
       'The Mythos is sealed. For now.',
     ],
   },
 ];
+
+// ---------------- nurse names ----------------
+const FIRST = ['Jennifer', 'Jessica', 'Sarah', 'Emily', 'Amanda', 'Ashley', 'Megan', 'Lauren', 'Rebecca', 'Michelle', 'Laura', 'Karen', 'Susan', 'Linda', 'Mary', 'Patricia', 'Barbara', 'Nancy', 'Lisa', 'Heather', 'Amy', 'Melissa', 'Stephanie', 'Rachel', 'Angela', 'Kelly', 'Christine', 'Elizabeth', 'Julie', 'Katie'];
+const LAST = ['Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Miller', 'Davis', 'Wilson', 'Taylor', 'Anderson', 'Thomas', 'Moore', 'Martin', 'Jackson', 'Thompson', 'White', 'Harris', 'Clark', 'Lewis', 'Walker', 'Hall', 'Allen', 'Young', 'King', 'Wright', 'Baker', 'Turner', 'Parker', 'Collins', 'Cooper'];
+export function randomName(taken = []) {
+  for (let i = 0; i < 40; i++) {
+    const name = `${FIRST[Math.floor(Math.random() * FIRST.length)]} ${LAST[Math.floor(Math.random() * LAST.length)]}`;
+    if (!taken.includes(name)) return name;
+  }
+  return `${FIRST[Math.floor(Math.random() * FIRST.length)]} ${LAST[Math.floor(Math.random() * LAST.length)]}`;
+}
