@@ -24,9 +24,9 @@ Then open http://localhost:5173. Art preview sheet: `/dev/art-sheet.html`.
   - Cursor: 15 s, winds back 0.1 s/s. Pointing hands (assets/hand.png) orbit the clock in rings of 50; the arrow is for clicking.
   - Nurse: 90 s, winds back 1 s/s. Each has an ordinary name, and they get their own ward in the middle panel.
 - **Achievements** fill the **Syrup** by 4% each; every 25 pours a new flavor.
-- The clock only ticks while the tab is visible. Saves go to `localStorage`.
+- Time keeps passing while the tab is in the background (closing the tab pauses it). The game autosaves to `localStorage` every 30 seconds.
 
-Console: `Clockie.state`, `Clockie.give(seconds)`, `Clockie.setOwned('nurse', 10)`.
+Console: `Clockie.state`, `Clockie.give(seconds)`, `Clockie.setOwned('farm', 10)`, `Clockie.buyUpgrade('farm-0')`.
 
 ## Layout
 

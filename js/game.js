@@ -2,7 +2,7 @@
 import * as ART from './art.js';
 import { upscale, ctx2d, canvas, bayer, mix, rgba, rng, silhouette } from './pixel.js';
 import {
-  VERSION, START_BANK, PRICE_GROWTH, SELL_RATE, RING_SIZE, BUILDINGS, ACHIEVEMENTS,
+  VERSION, START_BANK, PRICE_GROWTH, SELL_RATE, RING_SIZE, BUILDINGS, ACHIEVEMENTS, UPGRADES, UPGRADE,
   FLAVORS, ACH_PER_FLAVOR, SYRUP_PER_ACH, syrupState, newsPool, CHANGELOG, randomName,
 } from './data.js';
 
@@ -19,13 +19,16 @@ const freshRun = () => ({
   owned: Object.fromEntries(BUILDINGS.map((b) => [b.id, 0])),
   made: Object.fromEntries(BUILDINGS.map((b) => [b.id, 0])),
   dip3: false, dip1: false, saved3: false, saved1: false,
-  names: [],
+  names: [], upg: {},
 });
 const freshState = () => ({
   version: VERSION,
   started: false,
   run: freshRun(),
-  all: { earned: 0, clicks: 0, clickEarned: 0, deaths: 0, playTime: 0, firstPlayed: Date.now() },
+  all: {
+    earned: 0, clicks: 0, clickEarned: 0, deaths: 0, playTime: 0, firstPlayed: Date.now(),
+    spent: 0, sold: 0, newsClicks: 0, awayTime: 0, saves: 0, exports: 0, imports: 0, rapid: 0, menus: {},
+  },
   ach: {},
   opts: { sound: true, particles: true, short: false, fancy: true },
 });
@@ -33,7 +36,25 @@ let S = freshState();
 let mode = 'paused'; // 'play' | 'paused' | 'dead'
 let wiping = false;
 
-const sps = () => BUILDINGS.reduce((s, b) => s + S.run.owned[b.id] * b.sps, 0);
+const has = (id) => !!S.run.upg[id];
+const nonCursor = () => BUILDINGS.reduce((n, b) => (b.id === 'cursor' ? n : n + (S.run.owned[b.id] || 0)), 0);
+// Cookie Clicker's cursor rules: three upgrades double clicking and cursors; Thousand hands adds
+// 0.1 seconds per non-cursor building, and each later tier multiplies that bonus.
+const cursorDoublings = () => (has('cursor-0') ? 1 : 0) + (has('cursor-1') ? 1 : 0) + (has('cursor-2') ? 1 : 0);
+function fingerBonus() {
+  if (!has('cursor-3')) return 0;
+  let a = 0.1;
+  for (let i = 4; i < 8; i++) if (has('cursor-' + i)) a *= UPGRADE['cursor-' + i].mul;
+  return a * nonCursor();
+}
+function tierMult(id) {
+  let m = 1;
+  for (let i = 0; i < 8; i++) if (S.run.upg[`${id}-${i}`]) m *= 2;
+  return m;
+}
+const unitSps = (b) => (b.id === 'cursor' ? b.sps * 2 ** cursorDoublings() + fingerBonus() : b.sps * tierMult(b.id));
+const sps = () => BUILDINGS.reduce((s, b) => s + (S.run.owned[b.id] || 0) * unitSps(b), 0);
+const clickGain = () => 2 ** cursorDoublings() + fingerBonus();
 const achCount = () => ACHIEVEMENTS.reduce((n, a) => n + (S.ach[a.id] ? 1 : 0), 0);
 
 // Cookie Clicker pricing: each building costs base * 1.15^owned, rounded up.
@@ -122,8 +143,7 @@ function loadArt(assets) {
   ART_CACHE.cap = ART.clockCap();
   ART_CACHE.hand = ART.handRotator(assets.hand); // the pointing hand: a real image, rotated by RotSprite
   ART_CACHE.nurse = ART.nurseSprite();
-  const nd = ctx2d(ART_CACHE.nurse).getImageData(0, 0, ART_CACHE.nurse.width, ART_CACHE.nurse.height).data;
-  ART_CACHE.nurseMask = Uint8Array.from({ length: nd.length / 4 }, (_, i) => (nd[i * 4 + 3] > 127 ? 1 : 0));
+  ART_CACHE.rowBgs = {}; ART_CACHE.units = {}; ART_CACHE.masks = {};
   ART_CACHE.hospital = ART.hospitalTex();
   ART_CACHE.icons = ART.storeIcons(assets.hand);
 }
@@ -326,15 +346,20 @@ cv.addEventListener('pointerdown', (e) => {
   clickClock(p);
 });
 
+const clickTimes = [];
 function clickClock(p) {
-  const gain = 1;
+  const gain = clickGain();
+  const now = performance.now();
+  clickTimes.push(now);
+  while (clickTimes.length && now - clickTimes[0] > 1000) clickTimes.shift();
+  S.all.rapid = Math.max(S.all.rapid, clickTimes.length);
   S.run.bank += gain; S.run.earned += gain; S.run.clicks++;
   S.all.earned += gain; S.all.clicks++; S.all.clickEarned += gain;
   press = 0.07;
   sfx('click');
   const f = document.createElement('div');
   f.className = 'floater';
-  f.textContent = '+1';
+  f.textContent = '+' + fmt(gain, 1);
   f.style.left = p.cssX + (Math.random() * 16 - 8) + 'px';
   f.style.top = p.cssY - 20 + 'px';
   $('#floaters').appendChild(f);
@@ -355,8 +380,8 @@ function clickClock(p) {
 const rowsEl = $('#rows');
 let rowCanvases = [];
 const ROW_H = 64;
-const NURSE_STEP = 22;
-let nurseHover = null; // { b: 'nurse', i: index }
+let rowHover = null; // { b: building id, i: index }
+const rowStep = (id) => (id === 'nurse' ? 22 : 28);
 
 // every nurse gets a perfectly ordinary name, remembered in the save
 function syncNames() {
@@ -364,6 +389,17 @@ function syncNames() {
   r.names = Array.isArray(r.names) ? r.names : [];
   while (r.names.length < want) r.names.push(randomName(r.names));
   r.names.length = want;
+}
+
+// backdrop, sprite and hit-mask for a building's row
+function rowBg(id) { return id === 'nurse' ? ART_CACHE.hospital : (ART_CACHE.rowBgs[id] ||= ART.rowTex(id)); }
+function rowSprite(id) { return id === 'nurse' ? ART_CACHE.nurse : (ART_CACHE.units[id] ||= ART.unitSprite(id)); }
+function rowMask(id) {
+  if (!ART_CACHE.masks[id]) {
+    const spr = rowSprite(id), d = ctx2d(spr).getImageData(0, 0, spr.width, spr.height).data;
+    ART_CACHE.masks[id] = Uint8Array.from({ length: d.length / 4 }, (_, i) => (d[i * 4 + 3] > 127 ? 1 : 0));
+  }
+  return ART_CACHE.masks[id];
 }
 
 function buildRows() {
@@ -386,31 +422,32 @@ function buildRows() {
     rowCanvases.push(entry);
     c.addEventListener('pointermove', (e) => {
       const r = c.getBoundingClientRect();
-      const hit = nurseAt(entry, (e.clientX - r.left) / PX, (e.clientY - r.top) / PX);
+      const hit = rowAt(entry, (e.clientX - r.left) / PX, (e.clientY - r.top) / PX);
       const next = hit ? { b: b.id, i: hit.i } : null;
       c.style.cursor = hit ? 'pointer' : 'default';
       if (hit) {
-        const name = S.run.names[hit.i] || 'Nurse';
-        tipFor = { kind: 'html', ev: e, html: `<div class="tHead"><img src="${iconURL('nurse')}" alt=""><div><div class="tName">${name}</div><div class="tSub">Nurse</div></div></div>
-          <div class="line"></div><div>Winds back <b>1 second</b> per second.</div>` };
+        const title = b.id === 'nurse' ? (S.run.names[hit.i] || 'Nurse') : b.name;
+        const sub = b.id === 'nurse' ? 'Nurse' : `${hit.i + 1} of ${fmt(S.run.owned[b.id])}`;
+        tipFor = { kind: 'html', ev: e, html: `<div class="tHead"><img src="${iconURL(b.id)}" alt=""><div><div class="tName">${title}</div><div class="tSub">${sub}</div></div></div>
+          <div class="line"></div><div>Winds back <b>${fmt(unitSps(b), 1)} ${unitSps(b) === 1 ? 'second' : 'seconds'}</b> per second.</div><div class="quote">${b.quote}</div>` };
         showTip(e);
       } else hideTip();
-      if (next?.i !== nurseHover?.i) { nurseHover = next; drawRows(); }
+      if (next?.i !== rowHover?.i) { rowHover = next; drawRows(); }
     });
-    c.addEventListener('pointerleave', () => { nurseHover = null; hideTip(); drawRows(); });
+    c.addEventListener('pointerleave', () => { rowHover = null; hideTip(); drawRows(); });
   }
   $('#rowsEmpty').hidden = rowCanvases.length > 0;
 }
 
 const hash = (i) => { const r = rng(i * 9973 + 17); return r(); };
 
-// topmost nurse under an art-pixel position (transparent pixels don't count)
-function nurseAt(row, ax, ay) {
-  const spr = ART_CACHE.nurse;
+// topmost unit under an art-pixel position (transparent pixels don't count)
+function rowAt(row, ax, ay) {
+  const spr = rowSprite(row.b.id), mask = rowMask(row.b.id);
   for (let k = row.items.length - 1; k >= 0; k--) {
     const it = row.items[k], lx = Math.floor(ax - it.x), ly = Math.floor(ay - it.y);
     if (lx < 0 || ly < 0 || lx >= spr.width || ly >= spr.height) continue;
-    if (ART_CACHE.nurseMask[ly * spr.width + lx]) return it;
+    if (mask[ly * spr.width + lx]) return it;
   }
   return null;
 }
@@ -418,25 +455,23 @@ function nurseAt(row, ax, ay) {
 function drawRows() {
   for (const row of rowCanvases) {
     const { b, c, x } = row;
-    const tex = ART_CACHE.hospital;
+    const tex = rowBg(b.id), spr = rowSprite(b.id), step = rowStep(b.id);
     for (let ox = 0; ox < c.width; ox += tex.width) x.drawImage(tex, ox, 0);
-    if (b.id !== 'nurse') continue;
-    const spr = ART_CACHE.nurse;
-    const cap = Math.max(1, Math.floor((c.width - 16) / NURSE_STEP));
-    const n = Math.min(S.run.owned.nurse, cap);
-    // back row (odd) first, then the front row overlaps it. Nurses never move on their own.
+    const cap = Math.max(1, Math.floor((c.width - 16) / step));
+    const n = Math.min(S.run.owned[b.id], cap);
+    // back row (odd) first, then the front row overlaps it. Nothing here moves on its own.
     const order = [...Array(n).keys()].sort((a, bb) => (bb % 2) - (a % 2) || a - bb);
     row.items = [];
     for (const i of order) {
       const back = i % 2 === 1;
       const feet = back ? 54 : 60;
-      const dx = 8 + i * NURSE_STEP + Math.floor(hash(i) * 5);
-      const hot = nurseHover && nurseHover.b === b.id && nurseHover.i === i;
+      const dx = 8 + i * step + Math.floor(hash(i) * 5);
+      const hot = rowHover && rowHover.b === b.id && rowHover.i === i;
       const y = feet - spr.height - (hot ? 4 : 0);
       row.items.push({ i, x: dx, y });
       x.globalAlpha = hot ? 0.18 : 0.3;
       x.fillStyle = '#000';
-      x.fillRect(dx + 6, feet - 2, 20, 2);
+      x.fillRect(dx + 6, feet - 2, spr.width - 12, 2);
       x.globalAlpha = 1;
       if (hot) {
         // soft pale outline behind the sprite
@@ -487,6 +522,7 @@ function storeAction(b) {
     const cost = bulkCost(b, store.amt);
     if (r.bank - cost <= 0) { sfx('nope'); return; }
     r.bank -= cost;
+    S.all.spent += cost;
     r.owned[b.id] += store.amt;
     sfx('buy');
     if (r.bank < r.lowest) r.lowest = r.bank;
@@ -494,11 +530,13 @@ function storeAction(b) {
     const n = Math.min(store.amt, r.owned[b.id]);
     if (!n) return;
     r.bank += sellValue(b, n);
+    S.all.sold += n;
     r.owned[b.id] -= n;
     sfx('sell');
   }
   buildRows();
   refreshStore();
+  buildUpgrades();
   checkAch();
   if (tipFor) showTip();
 }
@@ -536,6 +574,49 @@ $('#buyBar').addEventListener('click', (e) => {
 });
 
 // ====================================================================
+// upgrades
+// ====================================================================
+const upgEl = $('#upgrades');
+let upgKey = '';
+const upgIcon = (u) => texURL(`upg-${u.b}-${u.tier}`, () => ART.upgradeIcon(u.b, u.tier));
+const availableUpgrades = () => UPGRADES.filter((u) => !S.run.upg[u.id] && (S.run.owned[u.b] || 0) >= u.req).sort((a, b) => a.cost - b.cost);
+
+function buildUpgrades() {
+  const list = availableUpgrades();
+  upgKey = list.map((u) => u.id).join(',');
+  upgEl.innerHTML = '';
+  if (!list.length) { upgEl.innerHTML = '<div class="empty">No upgrades available&hellip; yet.</div>'; return; }
+  for (const u of list) {
+    const el = document.createElement('div');
+    el.className = 'upg';
+    el.dataset.id = u.id;
+    el.innerHTML = `<img src="${upgIcon(u)}" alt="">`;
+    el.addEventListener('click', () => buyUpgrade(u));
+    el.addEventListener('mouseenter', () => { tipFor = { kind: 'upgrade', u, el }; showTip(); });
+    el.addEventListener('mouseleave', hideTip);
+    upgEl.appendChild(el);
+  }
+  refreshUpgrades(true);
+}
+function refreshUpgrades(skipRebuild) {
+  if (!skipRebuild && availableUpgrades().map((u) => u.id).join(',') !== upgKey) { buildUpgrades(); return; }
+  upgEl.querySelectorAll('.upg').forEach((el) => el.classList.toggle('no', S.run.bank - UPGRADE[el.dataset.id].cost <= 0));
+}
+function buyUpgrade(u) {
+  if (mode !== 'play') return;
+  const r = S.run;
+  if (r.bank - u.cost <= 0) { sfx('nope'); return; }
+  r.bank -= u.cost;
+  S.all.spent += u.cost;
+  r.upg[u.id] = true;
+  sfx('buy');
+  hideTip();
+  buildUpgrades();
+  refreshStore();
+  checkAch();
+}
+
+// ====================================================================
 // tooltip
 // ====================================================================
 const tip = $('#tooltip');
@@ -543,20 +624,35 @@ let tipFor = null;
 function showTip(e) {
   if (!tipFor) return;
   if (tipFor.kind === 'building') {
-    const { b, el } = tipFor, r = S.run, own = r.owned[b.id], total = sps();
+    const { b, el } = tipFor, r = S.run, own = r.owned[b.id], total = sps(), us = unitSps(b);
     const price = store.mode === 'buy' ? bulkCost(b, store.amt) : sellValue(b, Math.min(store.amt, own));
     const deadly = store.mode === 'buy' && r.bank - price <= 0 && r.bank > 0;
+    const noun = (n) => (n === 1 ? b.name : b.plural).toLowerCase();
     tip.innerHTML = `
       <div class="tHead"><img src="${iconURL(b.id)}" alt="">
-        <div><div class="tName">${b.name}</div><div class="tSub">owned: ${own}</div></div>
+        <div><div class="tName">${b.name}</div><div class="tSub">owned: ${fmt(own)}</div></div>
         <div class="tPrice ${store.mode === 'buy' && deadly ? 'no' : ''}">${store.mode === 'sell' ? '+' : ''}${fmt(price)} s</div></div>
       <div class="line"></div>
       <div>${b.desc}</div>
-      <div>&bull; each ${b.name.toLowerCase()} winds back <b>${fmt(b.sps, 1)} ${b.sps === 1 ? 'second' : 'seconds'}</b> per second</div>
-      ${own ? `<div>&bull; ${own} ${b.name.toLowerCase()}${own === 1 ? '' : 's'} winding back <b>${fmt(own * b.sps, 1)} seconds</b> per second (<b>${fmt(total ? (own * b.sps / total) * 100 : 0, 1)}%</b> of total)</div>
+      <div>&bull; each ${noun(1)} winds back <b>${fmt(us, 1)} ${us === 1 ? 'second' : 'seconds'}</b> per second</div>
+      ${own ? `<div>&bull; ${fmt(own)} ${noun(own)} winding back <b>${fmt(own * us, 1)} seconds</b> per second (<b>${fmt(total ? (own * us / total) * 100 : 0, 1)}%</b> of total)</div>
       <div>&bull; <b>${secs(Math.floor(r.made[b.id]))}</b> wound back so far</div>` : ''}
       ${deadly ? `<div class="warn">Buying ${store.amt > 1 ? 'these' : 'this'} would let the clock strike midnight!</div>` : ''}
-      <div class="quote">${b.quote}</div>`;
+      <div class="quote">${b.quote}</div>${b.lore ? `<div class="quote">${b.lore}</div>` : ''}`;
+    tip.hidden = false;
+    const er = el.getBoundingClientRect(), rr = $('#right').getBoundingClientRect();
+    const th = tip.offsetHeight, tw = tip.offsetWidth;
+    tip.style.left = Math.max(8, rr.left - tw - 14) + 'px';
+    tip.style.top = Math.min(innerHeight - th - 8, Math.max(8, er.top)) + 'px';
+  } else if (tipFor.kind === 'upgrade') {
+    const { u, el } = tipFor, afford = S.run.bank - u.cost > 0;
+    tip.innerHTML = `
+      <div class="tHead"><img src="${upgIcon(u)}" alt="">
+        <div><div class="tName">${u.name}</div><div class="tSub">Upgrade</div></div>
+        <div class="tPrice ${afford ? '' : 'no'}">${fmt(u.cost)} s</div></div>
+      <div class="line"></div>
+      <div>${u.desc}</div>
+      <div class="quote">${u.quote}</div>`;
     tip.hidden = false;
     const er = el.getBoundingClientRect(), rr = $('#right').getBoundingClientRect();
     const th = tip.offsetHeight, tw = tip.offsetWidth;
@@ -581,20 +677,34 @@ function bindHtmlTip(el, html) {
 // ====================================================================
 // achievements & notifications
 // ====================================================================
+function achContext() {
+  const o = S.run.owned, d = new Date();
+  return {
+    sps: sps(),
+    buildings: BUILDINGS.reduce((n, b) => n + (o[b.id] || 0), 0),
+    variety: BUILDINGS.filter((b) => o[b.id] > 0).length,
+    upgrades: Object.keys(S.run.upg).length,
+    achievements: achCount(),
+    hour: d.getHours(), minute: d.getMinutes(),
+  };
+}
 function checkAch() {
-  const s = sps();
-  let got = false;
-  for (const a of ACHIEVEMENTS) {
-    if (S.ach[a.id] || !a.check(S, s)) continue;
-    S.ach[a.id] = Date.now();
-    got = true;
-    note(achURL(a, false), 'Achievement unlocked', a.name);
+  let got = false, again = true, passes = 0;
+  while (again && passes++ < 4) {
+    again = false;
+    const c = achContext();
+    for (const a of ACHIEVEMENTS) {
+      if (S.ach[a.id] || !a.check(S, c)) continue;
+      S.ach[a.id] = Date.now();
+      got = again = true;
+      note(achURL(a, false), 'Achievement unlocked', a.name);
+    }
   }
   if (got) {
     sfx('ach');
     if (openMenu === 'stats') renderMenu();
     const n = achCount();
-    if (n % ACH_PER_FLAVOR === 0) {
+    if (Math.floor(n / ACH_PER_FLAVOR) > Math.floor((n - 1) / ACH_PER_FLAVOR) || n % ACH_PER_FLAVOR === 0) {
       const { flavor } = syrupState(n);
       note(texURL('flav-' + flavor.name, () => ART.achievementIcon('clock', 2)), 'A new syrup seeps out', flavor.name);
     }
@@ -625,7 +735,7 @@ function toggleMenu(name) {
   menuEl.hidden = !openMenu;
   document.querySelectorAll('.menuBtn').forEach((b) => b.classList.toggle('on', b.dataset.menu === openMenu));
   hideTip();
-  if (openMenu) renderMenu();
+  if (openMenu) { S.all.menus[openMenu] = true; renderMenu(); checkAch(); }
 }
 
 function renderMenu() {
@@ -657,7 +767,7 @@ function renderMenu() {
       bindHtmlTip(img, () => {
         const have = !!S.ach[a.id];
         return `<div class="tHead"><img src="${achURL(a, !have)}" alt=""><div><div class="tName">${have ? a.name : '???'}</div>
-          <div class="tSub">${have ? 'Achievement unlocked' : 'Locked'}</div></div></div><div class="line"></div><div>${a.desc}</div>`;
+          <div class="tSub">${have ? 'Achievement unlocked' : 'Locked'}</div></div></div><div class="line"></div><div>${a.desc}</div>${have ? `<div class="quote">${a.quote}</div>` : ''}`;
       });
     });
     menuContent.querySelectorAll('.flavor').forEach((el) => {
@@ -692,7 +802,7 @@ function renderMenu() {
       <div class="listing">It is one minute to midnight. Click the clock to wind its second hand back.
         Spend the time you've saved on cursors and nurses, who'll wind it back for you.</div>
       <div class="listing">If the clock ever strikes midnight, you die. Don't let it strike midnight.</div>
-      <div class="listing menuNote">The clock only ticks while you're watching it.</div>
+      <div class="listing menuNote">The clock keeps ticking while this tab sits in the background. Close the tab, and it waits for you.</div>
       <div class="listing"><small>Clockie Clicker v${VERSION}. Inspired by <i>Cookie Clicker</i> by Orteil.</small></div>
       <div class="subTitle">Version history</div>
       <div class="changelog">${CHANGELOG.map((c) => `<h4>v${c.v} <small style="font-family:Merriweather;font-size:11px;color:#b9b2a4">${c.date}</small></h4><ul>${c.notes.map((x) => `<li>${x}</li>`).join('')}</ul>`).join('')}</div>`;
@@ -717,6 +827,12 @@ function renderStatsGeneral() {
     row('Time wound back (all time)', `${secs(Math.floor(all.earned))} <small>(${dur(all.earned)})</small>`),
     row('This life has lasted', dur(r.time, 3)),
     row('Buildings owned', fmt(owned)),
+    row('Upgrades owned', `${Object.keys(r.upg).length} <small>of ${UPGRADES.length}</small>`),
+    row('Time spent in the store', secs(Math.floor(all.spent))),
+    row('Buildings sold', fmt(all.sold)),
+    row('News clicks', fmt(all.newsClicks)),
+    row('Time spent in the background', dur(all.awayTime, 3)),
+    row('Best clicking speed', `${all.rapid} per second`),
     row('Winding back per second', `${fmt(s, 1)} <small>(the clock moves forward 1 per second)</small>`),
     row('Clock clicks', `${fmt(r.clicks)} <small>(${fmt(all.clicks)} all time)</small>`),
     row('Time from clicking (all time)', secs(all.clickEarned)),
@@ -732,6 +848,7 @@ function optionAction(act) {
   if (act === 'export') {
     area.innerHTML = `<textarea class="saveBox" readonly>${btoa(unescape(encodeURIComponent(JSON.stringify(S))))}</textarea>`;
     area.querySelector('textarea').select();
+    S.all.exports++; checkAch();
   }
   if (act === 'import') {
     area.innerHTML = `<textarea class="saveBox" placeholder="Paste your save here"></textarea><button class="optBtn" id="doImport">Load</button>`;
@@ -739,6 +856,7 @@ function optionAction(act) {
       try {
         const o = JSON.parse(decodeURIComponent(escape(atob(area.querySelector('textarea').value.trim()))));
         applySave(o);
+        S.all.imports++;
         mode = 'paused';
         startOverlay();
         rebuildAll();
@@ -758,6 +876,11 @@ function optionAction(act) {
 // news ticker
 // ====================================================================
 let lastNews = '';
+$('#news').addEventListener('click', () => {
+  S.all.newsClicks++;
+  rotateNews();
+  checkAch();
+});
 function rotateNews() {
   const pool = newsPool(S, sps()).filter((x) => x !== lastNews);
   lastNews = pool[Math.floor(Math.random() * pool.length)];
@@ -781,11 +904,11 @@ function startOverlay() {
     overlay(`${clockImg()}<h1>Clockie Clicker</h1>
       <p>It is <b>one minute to midnight</b>.</p>
       <p>Click the clock to wind its second hand back. Spend the seconds you save on help.</p>
-      <p>If the clock ever strikes twelve&hellip; you die.</p>`, 'Begin', () => { S.started = true; mode = 'play'; save(); });
+      <p>If the clock ever strikes twelve&hellip; you die.</p>`, 'Begin', () => { S.started = true; play(); save(); });
   } else {
     overlay(`${clockImg()}<h1>Welcome back</h1>
       <p>The clock waited for you. It always does.</p>
-      <p>You have <b>${secs(shownBank())}</b> until midnight.</p>`, 'Resume', () => { mode = 'play'; });
+      <p>You have <b>${secs(shownBank())}</b> until midnight.</p>`, 'Resume', () => { play(); });
   }
 }
 
@@ -804,7 +927,7 @@ function die() {
     <p class="menuNote">Your achievements and syrup survive. Your time does not.</p>`, 'Wind it back', () => {
     S.run = freshRun();
     document.body.classList.remove('dead');
-    mode = 'play';
+    play();
     rebuildAll();
     save();
   });
@@ -817,8 +940,13 @@ function applySave(o) {
   const f = freshState();
   S = {
     ...f, ...o,
-    run: { ...f.run, ...o.run, owned: { ...f.run.owned, ...(o.run?.owned || {}) }, made: { ...f.run.made, ...(o.run?.made || {}) } },
-    all: { ...f.all, ...o.all },
+    run: {
+      ...f.run, ...o.run,
+      owned: { ...f.run.owned, ...(o.run?.owned || {}) },
+      made: { ...f.run.made, ...(o.run?.made || {}) },
+      upg: { ...(o.run?.upg || {}) },
+    },
+    all: { ...f.all, ...o.all, menus: { ...(o.all?.menus || {}) } },
     opts: { ...f.opts, ...o.opts },
     ach: { ...(o.ach || {}) },
   };
@@ -826,8 +954,9 @@ function applySave(o) {
 function save(manual) {
   if (wiping) return;
   try {
+    if (manual) S.all.saves++;
     localStorage.setItem(SAVE_KEY, JSON.stringify(S));
-    if (manual) note(null, 'Options', 'Game saved');
+    if (manual) { note(null, 'Options', 'Game saved'); checkAch(); }
   } catch { /* storage may be unavailable */ }
 }
 function load() {
@@ -841,17 +970,31 @@ function load() {
 // main loop
 // ====================================================================
 let last = performance.now(), slow = 0, lastShown = -1;
-function logic(dt) {
-  const r = S.run, s = sps();
-  r.bank += (s - 1) * dt;
-  r.earned += s * dt; S.all.earned += s * dt;
-  for (const b of BUILDINGS) r.made[b.id] += r.owned[b.id] * b.sps * dt;
-  r.time += dt; S.all.playTime += dt;
+let lastReal = Date.now();
+function play() { mode = 'play'; lastReal = Date.now(); }
+
+// Time is measured against the wall clock, so it keeps passing while the tab sits in the
+// background (browsers throttle timers there, but the elapsed time is applied in full).
+// Closing the tab stops it: nothing is applied across sessions.
+function pump() {
+  const now = Date.now(), dt = (now - lastReal) / 1000;
+  lastReal = now;
+  if (mode === 'play' && dt > 0) advance(dt);
+}
+function advance(dt) {
+  const r = S.run, s = sps(), net = s - 1;
+  let t = dt;
+  if (net < 0 && r.bank + net * dt <= 0) t = Math.max(0, r.bank / -net); // stop at the stroke of midnight
+  r.bank += net * t;
+  r.earned += s * t; S.all.earned += s * t;
+  for (const b of BUILDINGS) r.made[b.id] += (r.owned[b.id] || 0) * unitSps(b) * t;
+  r.time += t; S.all.playTime += t;
+  if (document.hidden) S.all.awayTime += t;
   if (r.bank < r.lowest) r.lowest = r.bank;
   if (r.bank < 3) r.dip3 = true;
   if (r.bank < 1) r.dip1 = true;
   if (r.bank >= 60) { if (r.dip3) r.saved3 = true; if (r.dip1) r.saved1 = true; }
-  if (r.bank <= 0) die();
+  if (r.bank <= 1e-9) die();
 }
 
 function updateCounter() {
@@ -871,7 +1014,7 @@ function frame(now) {
   const dt = Math.min(0.25, (now - last) / 1000);
   last = now;
   const t = now / 1000;
-  if (mode === 'play' && !document.hidden) logic(dt);
+  pump();
   renderLeft(t, dt);
   updateCounter();
   slow -= dt;
@@ -879,7 +1022,8 @@ function frame(now) {
     slow = 0.1;
     drawRows();
     refreshStore();
-    if (tipFor?.kind === 'building') showTip();
+    refreshUpgrades();
+    if (tipFor?.kind === 'building' || tipFor?.kind === 'upgrade') showTip();
   }
   requestAnimationFrame(frame);
 }
@@ -888,6 +1032,7 @@ function rebuildAll() {
   sizeLeft();
   buildStore();
   buildRows();
+  buildUpgrades();
   if (openMenu) renderMenu();
   root.setProperty('--header-h', $('#header').offsetHeight + 'px');
 }
@@ -905,9 +1050,10 @@ async function boot() {
   rotateNews();
   setInterval(rotateNews, 9000);
   setInterval(() => { checkAch(); if (openMenu === 'stats') renderStatsGeneral(); }, 500);
+  setInterval(() => { pump(); updateCounter(); }, 1000); // keeps the clock honest while the tab is in the background
   setInterval(() => save(), 30000);
   addEventListener('beforeunload', () => save());
-  document.addEventListener('visibilitychange', () => { if (document.hidden) save(); last = performance.now(); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) save(); else pump(); last = performance.now(); });
   // re-layout whenever the panels change size (window resize, zoom, or a tab that loaded hidden)
   let rt;
   const relayout = () => {
@@ -925,8 +1071,11 @@ async function boot() {
 // console access for tinkering, like Cookie Clicker's global `Game`
 window.Clockie = {
   get state() { return S; },
+  get sps() { return sps(); },
+  get clickGain() { return clickGain(); },
+  buyUpgrade(id) { buyUpgrade(UPGRADE[id]); },
   give(seconds) { S.run.bank += seconds; },
-  setOwned(id, n) { S.run.owned[id] = n; buildRows(); refreshStore(); checkAch(); },
+  setOwned(id, n) { S.run.owned[id] = n; buildRows(); refreshStore(); buildUpgrades(); checkAch(); },
 };
 
 if (document.fonts?.ready) document.fonts.ready.then(boot); else boot();

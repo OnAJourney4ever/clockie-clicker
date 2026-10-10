@@ -36,6 +36,10 @@ show('bg', ART.bgTile(), 2); show('plank', ART.plankTex(), 2); show('dark', ART.
 show('woodv', ART.woodTex(12, 96, { seed: 3, vertical: true, bevel: true }), 3);
 show('close', ART.closeIcon(), 4); show('fav', ART.favicon(), 6);
 show('jar', ART.syrupJar('#c4651a', 56), 6);
+ART.NEW_BUILDINGS.forEach((id) => show('unit-' + id, ART.unitSprite(id), 5));
+ART.NEW_BUILDINGS.forEach((id) => show('row-' + id, ART.rowTex(id), 3));
+ART.NEW_BUILDINGS.forEach((id, i) => show('upg-' + id, ART.upgradeIcon(id, i % 8), 3));
+show('upg-cursor', ART.upgradeIcon('cursor', 3), 3); show('upg-nurse', ART.upgradeIcon('nurse', 1), 3);
 show('jar2', ART.syrupJar('#4656c8', 12), 6);
 show('jar3', ART.syrupJar('#e0466a', 96), 6);
 </script>

@@ -160,6 +160,9 @@ b { color: #fff; }
   line-height: 1.4;
   color: #f2ead8;
 }
+#news { cursor: pointer; }
+#news:hover { background: rgba(255, 255, 255, 0.07); }
+#news:active { background: rgba(255, 255, 255, 0.12); }
 #newsText { transition: opacity 0.4s, transform 0.4s; }
 #newsText.out { opacity: 0; transform: translateY(-8px); }
 #newsText .tag { color: var(--gold); font-weight: 700; margin-right: 4px; }
@@ -281,8 +284,18 @@ textarea.saveBox {
   background-size: var(--tex-wood-h-size);
   box-shadow: 0 var(--px) 0 #0d0603, 0 calc(var(--px) * -1) 0 #0d0603;
 }
-#upgrades { min-height: 64px; padding: 8px; background: rgba(0, 0, 0, 0.3); display: flex; align-items: center; justify-content: center; }
-#upgrades .empty { color: rgba(255, 255, 255, 0.3); font-style: italic; font-size: 12px; }
+#upgrades {
+  min-height: 64px; max-height: 210px; overflow-y: auto;
+  padding: 8px;
+  background: rgba(0, 0, 0, 0.3);
+  display: flex; flex-wrap: wrap; gap: 4px; align-content: flex-start;
+}
+#upgrades .empty { width: 100%; padding: 14px 0; text-align: center; color: rgba(255, 255, 255, 0.3); font-style: italic; font-size: 12px; }
+.upg { width: calc(var(--px) * 16); height: calc(var(--px) * 16); cursor: pointer; }
+.upg img { width: 100%; height: 100%; display: block; image-rendering: pixelated; image-rendering: crisp-edges; }
+.upg:hover { filter: brightness(1.25); transform: translateY(-2px); }
+.upg.no { filter: brightness(0.5) saturate(0.6); }
+.upg.no:hover { filter: brightness(0.65) saturate(0.7); }
 #buyBar { display: flex; justify-content: space-between; padding: 6px 8px; background: rgba(0, 0, 0, 0.4); }
 .seg { display: flex; box-shadow: 0 0 0 var(--px) #0d0603; }
 .seg button {
