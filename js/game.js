@@ -19,7 +19,7 @@ const freshRun = () => ({
   owned: Object.fromEntries(BUILDINGS.map((b) => [b.id, 0])),
   made: Object.fromEntries(BUILDINGS.map((b) => [b.id, 0])),
   dip3: false, dip1: false, saved3: false, saved1: false,
-  names: [], upg: {},
+  names: [], upg: {}, peak: START_BANK, seen: {},
 });
 const freshState = () => ({
   version: VERSION,
@@ -381,7 +381,7 @@ const rowsEl = $('#rows');
 let rowCanvases = [];
 const ROW_H = 64;
 let rowHover = null; // { b: building id, i: index }
-const rowStep = (id) => (id === 'nurse' ? 22 : 28);
+const rowStep = (id) => (id === 'nurse' ? 22 : 36);
 
 // every nurse gets a perfectly ordinary name, remembered in the save
 function syncNames() {
@@ -467,12 +467,14 @@ function drawRows() {
       const feet = back ? 54 : 60;
       const dx = 8 + i * step + Math.floor(hash(i) * 5);
       const hot = rowHover && rowHover.b === b.id && rowHover.i === i;
-      const y = feet - spr.height - (hot ? 4 : 0);
+      const y = (b.id === 'nurse' ? feet - spr.height : feet - 46) - (hot ? 4 : 0);
       row.items.push({ i, x: dx, y });
-      x.globalAlpha = hot ? 0.18 : 0.3;
-      x.fillStyle = '#000';
-      x.fillRect(dx + 6, feet - 2, spr.width - 12, 2);
-      x.globalAlpha = 1;
+      if (b.id === 'nurse') {
+        x.globalAlpha = hot ? 0.18 : 0.3;
+        x.fillStyle = '#000';
+        x.fillRect(dx + 6, feet - 2, spr.width - 12, 2);
+        x.globalAlpha = 1;
+      }
       if (hot) {
         // soft pale outline behind the sprite
         const out = silhouette(spr, '#fff6c8');
@@ -516,7 +518,7 @@ function buildStore() {
 }
 
 function storeAction(b) {
-  if (mode !== 'play') return;
+  if (mode !== 'play' || !S.run.seen[b.id]) return;
   const r = S.run;
   if (store.mode === 'buy') {
     const cost = bulkCost(b, store.amt);
@@ -541,12 +543,31 @@ function storeAction(b) {
   if (tipFor) showTip();
 }
 
+// A building stays hidden until you have held 60% of its price. The next one shows as a silhouette.
+const REVEAL = 0.6;
+const revealAt = (b) => b.base * REVEAL;
+function updateReveal() {
+  const r = S.run;
+  r.peak = Math.max(r.peak || 0, r.bank);
+  r.seen = r.seen || {};
+  for (const b of BUILDINGS) if (!r.seen[b.id] && (r.owned[b.id] > 0 || r.peak >= revealAt(b))) r.seen[b.id] = true;
+}
+
 function refreshStore() {
   const r = S.run;
+  updateReveal();
+  let teased = false;
   for (const b of BUILDINGS) {
     const el = store.els[b.id];
     if (!el) continue;
+    const seen = !!r.seen[b.id];
+    const teaser = !seen && !teased;
+    if (!seen) teased = true;
+    el.hidden = !seen && !teaser;
+    el.classList.toggle('locked', !seen);
+    el.querySelector('.bName').textContent = seen ? b.name : '???';
     const cost = el.querySelector('.bCost'), span = cost.querySelector('span');
+    if (!seen) { span.textContent = '???'; cost.className = 'bCost no'; el.classList.add('disabled'); el.querySelector('.bOwned').textContent = ''; continue; }
     let ok;
     if (store.mode === 'buy') {
       const price = bulkCost(b, store.amt);
@@ -623,7 +644,17 @@ const tip = $('#tooltip');
 let tipFor = null;
 function showTip(e) {
   if (!tipFor) return;
-  if (tipFor.kind === 'building') {
+  if (tipFor.kind === 'building' && !S.run.seen[tipFor.b.id]) {
+    const { b, el } = tipFor;
+    tip.innerHTML = `
+      <div class="tHead"><img src="${iconURL(b.id)}" alt="" style="filter:brightness(0);opacity:.6"><div><div class="tName">???</div><div class="tSub">Not yet discovered</div></div></div>
+      <div class="line"></div>
+      <div>Hold <b>${fmt(Math.ceil(revealAt(b)))} seconds</b> on the clock to find out what this is.</div>`;
+    tip.hidden = false;
+    const er = el.getBoundingClientRect(), rr = $('#right').getBoundingClientRect();
+    tip.style.left = Math.max(8, rr.left - tip.offsetWidth - 14) + 'px';
+    tip.style.top = Math.min(innerHeight - tip.offsetHeight - 8, Math.max(8, er.top)) + 'px';
+  } else if (tipFor.kind === 'building') {
     const { b, el } = tipFor, r = S.run, own = r.owned[b.id], total = sps(), us = unitSps(b);
     const price = store.mode === 'buy' ? bulkCost(b, store.amt) : sellValue(b, Math.min(store.amt, own));
     const deadly = store.mode === 'buy' && r.bank - price <= 0 && r.bank > 0;
@@ -697,7 +728,7 @@ function checkAch() {
       if (S.ach[a.id] || !a.check(S, c)) continue;
       S.ach[a.id] = Date.now();
       got = again = true;
-      note(achURL(a, false), 'Achievement unlocked', a.name);
+      note(achURL(a, false), 'Achievement unlocked', a.name, a.quote);
     }
   }
   if (got) {
@@ -711,10 +742,10 @@ function checkAch() {
   }
 }
 
-function note(icon, title, name, life = 6000) {
+function note(icon, title, name, quote = '', life = 7000) {
   const n = document.createElement('div');
   n.className = 'note';
-  n.innerHTML = `${icon ? `<img src="${icon}" alt="">` : ''}<div><div class="t">${title}</div><div class="n">${name}</div></div><button class="x" aria-label="Dismiss"></button>`;
+  n.innerHTML = `${icon ? `<img src="${icon}" alt="">` : ''}<div><div class="t">${title}</div><div class="n">${name}</div>${quote ? `<div class="q">${quote}</div>` : ''}</div><button class="x" aria-label="Dismiss"></button>`;
   n.querySelector('.x').onclick = () => n.remove();
   $('#notes').appendChild(n);
   const all = $('#notes').children;
@@ -991,6 +1022,8 @@ function advance(dt) {
   r.time += t; S.all.playTime += t;
   if (document.hidden) S.all.awayTime += t;
   if (r.bank < r.lowest) r.lowest = r.bank;
+  if (r.bank > r.peak) r.peak = r.bank;
+  updateReveal();
   if (r.bank < 3) r.dip3 = true;
   if (r.bank < 1) r.dip1 = true;
   if (r.bank >= 60) { if (r.dip3) r.saved3 = true; if (r.dip1) r.saved1 = true; }

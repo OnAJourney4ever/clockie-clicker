@@ -5,6 +5,10 @@ import {
   Pix, canvas, ctx2d, sprite, silhouette, crop, vnoise, bayer, ditherIndex, drawText, textWidth,
   mix, rotator, rng, smooth2x,
 } from './pixel.js';
+import {
+  setHand, achievementIcon as newAchievementIcon, upgradeIcon as newUpgradeIcon, storeIcon, BUILDING_IDS,
+} from './icons2.js';
+import { buildingIcon } from './icons.js';
 
 export const K = 2;
 export const CLOCK_R = 48 * K; // face sprite is 193x193, centre pixel (96,96)
@@ -22,6 +26,7 @@ export async function loadAssets() {
   });
   const c = canvas(img.naturalWidth, img.naturalHeight);
   ctx2d(c).drawImage(img, 0, 0);
+  setHand(c);
   return { hand: c };
 }
 
@@ -233,7 +238,7 @@ export function nurseSprite() {
 }
 
 // ---------------- store icons (32x32) ----------------
-export function storeIcons(handCanvas) {
+function storeIconsOld(handCanvas) {
   const cur = new Pix(32, 32);
   cur.blit(silhouette(handCanvas, '#00000066'), 7, 6);
   cur.blit(handCanvas, 6, 5);
@@ -273,7 +278,7 @@ export const TIERS = [
   ['#e0e0e8', '#ffffff', '#9a9aac'], // platinum
 ];
 
-export function achievementIcon(glyphName, tier, locked = false) {
+function achievementIconOld(glyphName, tier, locked = false) {
   const p = new Pix(16, 16);
   const [base, hi, lo] = locked ? ['#2a2a30', '#3e3e48', '#18181c'] : TIERS[Math.min(tier, TIERS.length - 1)];
   for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
@@ -382,7 +387,7 @@ export function hospitalTex() {
   p.rect(15, 4, 2, 9, '#3d6863');
   p.rect(10, 8, 12, 1, '#3d6863');
   for (let i = 0; i < 4; i++) p.set(11 + i, 11 - i, '#ffffff');
-  return smooth2x(p.done());
+  return mute(smooth2x(p.done()), 0.55, 0.78);
 }
 
 // small pixel "X" used on menu close buttons (22x22)
@@ -701,7 +706,7 @@ export function unit16(id) {
   }
   return unitCache[id];
 }
-export const unitSprite = (id) => smooth2x(unit16(id)); // 32x32, used for icons and building rows
+const unitSpriteOld = (id) => smooth2x(unit16(id));
 
 // 16x16 glyph for achievements and upgrades: 'b:<building id>' for the new buildings
 export function glyphCanvas(name) {
@@ -710,7 +715,7 @@ export function glyphCanvas(name) {
 }
 
 // upgrade icon: the building on a tier-coloured tile with one pip per tier
-export function upgradeIcon(bid, tier) {
+function upgradeIconOld(bid, tier) {
   const p = new Pix(16, 16);
   const [base, hi, lo] = TIERS[Math.min(tier, TIERS.length - 1)];
   for (let y = 0; y < 16; y++) for (let x = 0; x < 16; x++) {
@@ -839,7 +844,31 @@ export function rowTex(id) {
     },
   };
   (scenes[id] || scenes.farm)();
-  return smooth2x(p.done());
+  return mute(smooth2x(p.done()));
+}
+
+// ---------------- v0.4: Cookie Clicker-style icons (see icons.js / icons2.js) ----------------
+export const achievementIcon = newAchievementIcon;
+export const upgradeIcon = newUpgradeIcon;
+export const unitSprite = (id) => buildingIcon(id); // 48x48, used in the store and for the building rows
+export function storeIcons(handCanvas) {
+  setHand(handCanvas);
+  const map = {};
+  for (const id of ['cursor', 'nurse', ...BUILDING_IDS]) map[id] = storeIcon(id);
+  return map;
+}
+
+// pull colours toward muted, earthy browns (the row scenes sit behind detailed icons)
+function mute(c, sat = 0.55, dark = 0.84) {
+  const x = ctx2d(c), img = x.getImageData(0, 0, c.width, c.height), d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const l = d[i] * 0.3 + d[i + 1] * 0.59 + d[i + 2] * 0.11;
+    d[i] = Math.min(255, (l + (d[i] - l) * sat) * dark * 1.05);
+    d[i + 1] = (l + (d[i + 1] - l) * sat) * dark;
+    d[i + 2] = (l + (d[i + 2] - l) * sat) * dark * 0.9;
+  }
+  x.putImageData(img, 0, 0);
+  return c;
 }
 
 export { rng, crop };

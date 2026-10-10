@@ -1,6 +1,6 @@
 // data.js — buildings, upgrades, achievements, syrup flavours, news and changelog.
 
-export const VERSION = '0.3.1';
+export const VERSION = '0.4.0';
 export const START_BANK = 60; // the game starts at 11:59:00 PM
 export const PRICE_GROWTH = 1.15; // Cookie Clicker: price = base * 1.15^owned, rounded up
 export const SELL_RATE = 0.25; // Cookie Clicker refunds 25% of what a building cost
@@ -233,7 +233,7 @@ ladder('click', 'cursor', [
   [100000, 'Carpal tunnel vision', 'You see only the clock now.'],
   [1000000, 'A million little ticks', 'Death by a million papercuts, delayed.'],
 ], (n) => `Click the clock <b>${n$(n)}</b> ${n === 1 ? 'time' : 'times'}.`, (g, c, n) => g.all.clicks >= n);
-ladder('rapid', 'cursor', [
+ladder('rapid', 'rapid', [
   [5, 'Quick draw', 'Fastest finger in the west wing.'],
   [10, 'Trigger finger', 'The clock flinches.'],
   [15, 'Blur', 'Witnesses report only a smear.'],
@@ -303,14 +303,14 @@ ladder('play', 'clock', [
 ], (n) => `Play for <b>${dur$(n)}</b> in total.`, (g, c, n) => g.all.playTime >= n);
 
 // -- being away (the clock keeps running while the tab is in the background)
-ladder('away', 'clock', [
+ladder('away', 'zzz', [
   [MIN, 'Out of office', 'Back in five minutes. Probably.'],
   [HOUR, 'Gone fishing', 'The clock managed fine without you.'],
   [DAY, 'Left it running', 'And running. And running.'],
 ], (n) => `Keep the game running in the background for <b>${dur$(n)}</b>.`, (g, c, n) => g.all.awayTime >= n);
 
 // -- total time spent in the store
-ladder('spent', 'hourglass', [
+ladder('spent', 'coin', [
   [HOUR, 'Shopaholic', 'An hour well spent. On other hours.'],
   [YEAR, 'Big spender', 'Well, time is money.'],
   [1000 * YEAR, 'Time baron', 'You own most of the minutes.'],
@@ -419,7 +419,7 @@ bld('portal', ['portal', 'portals'], [
 ]);
 
 // -- total buildings, variety, upgrades, achievements, deaths, close calls
-ladder('bld', 'clock', [
+ladder('bld', 'house', [
   [10, 'Landlord', 'Rent is due, in seconds.'],
   [50, 'Property mogul', 'Do not pass go. Do pass midnight.'],
   [100, 'City planner', 'Zoning laws remain, mysteriously, suspended.'],
@@ -427,20 +427,20 @@ ladder('bld', 'clock', [
   [500, 'Empire', 'The sun never sets. Because you asked it not to.'],
   [1000, 'Civilization', 'Please print more calendars.'],
 ], (n) => `Own <b>${n$(n)}</b> buildings in total.`, (g, c, n) => c.buildings >= n);
-ladder('variety', 'clock', [
+ladder('variety', 'star', [
   [3, 'Diversified', 'Do not put all your clocks in one basket.'],
   [5, 'Well-rounded', 'A nice mix of cuckoo and grandfather.'],
   [8, 'Renaissance clock', 'An expert at many things, all of them about time.'],
   [11, 'Full roster', 'One of everything. For the team photo.'],
 ], (n) => `Own at least one of <b>${n}</b> different building types.`, (g, c, n) => c.variety >= n);
-ladder('upg', 'bolt', [
+ladder('upg', 'gear', [
   [1, 'Upgrade', 'Plus one. In every possible way.'],
   [5, 'Handyman', 'Duct tape, mostly.'],
   [20, 'Tinkerer', 'The manual was more of a suggestion.'],
   [50, 'Mad scientist', 'It is alive! And a little late.'],
   [75, 'Mastermind', 'Everything is going exactly according to schedule.'],
 ], (n) => `Own <b>${n}</b> ${n === 1 ? 'upgrade' : 'upgrades'}.`, (g, c, n) => c.upgrades >= n);
-ladder('ach', 'clock', [
+ladder('ach', 'trophy', [
   [10, 'Making progress', 'One small step for a clock.'],
   [25, 'Overachiever', 'Please stop, you are making the others look bad.'],
   [50, 'Completionist', 'There are still more of these, you know.'],
@@ -457,23 +457,23 @@ add('close3', 'Close shave', 'Let the clock get within <b>3 seconds</b> of midni
 add('close1', 'By a hair', 'Let the clock get within <b>1 second</b> of midnight, then climb back to a full minute.', 'heart', 2, (g) => g.run.saved1, 'Someone just got a lot older.');
 
 // -- miscellaneous
-add('menu-stats', 'Self-assessment', 'Open the Stats menu.', 'clock', 0, (g) => g.all.menus.stats, 'Numbers! And more numbers.');
-add('menu-options', 'Under the hood', 'Open the Options menu.', 'clock', 0, (g) => g.all.menus.options, 'Fiddle with the dials. Gently.');
-add('menu-info', 'Read the manual', 'Open the Info menu.', 'clock', 0, (g) => g.all.menus.info, 'Nobody does. Except you.');
-add('menu-mythos', 'Behind the curtain', 'Open the Mythos menu.', 'clock', 0, (g) => g.all.menus.mythos, 'The curtain does not move. But it was looking at you.');
-ladder('news', 'clock', [
+add('menu-stats', 'Self-assessment', 'Open the Stats menu.', 'chart', 0, (g) => g.all.menus.stats, 'Numbers! And more numbers.');
+add('menu-options', 'Under the hood', 'Open the Options menu.', 'gear', 0, (g) => g.all.menus.options, 'Fiddle with the dials. Gently.');
+add('menu-info', 'Read the manual', 'Open the Info menu.', 'book', 0, (g) => g.all.menus.info, 'Nobody does. Except you.');
+add('menu-mythos', 'Behind the curtain', 'Open the Mythos menu.', 'eye', 0, (g) => g.all.menus.mythos, 'The curtain does not move. But it was looking at you.');
+ladder('news', 'news', [
   [1, 'Headline reader', 'Extra, extra!'],
   [50, 'Tabloid addiction', 'You can stop whenever you like. Probably.'],
   [200, 'Fake news', 'You have personally read every possible headline. Twice.'],
 ], (n) => `Click the news ticker <b>${n}</b> ${n === 1 ? 'time' : 'times'}.`, (g, c, n) => g.all.newsClicks >= n);
-add('save1', 'Better safe than sorry', 'Save the game yourself.', 'clock', 0, (g) => g.all.saves >= 1, 'The game saves every thirty seconds, but you did not know that.');
-add('export1', 'Backup plan', 'Export your save.', 'clock', 1, (g) => g.all.exports >= 1, 'A copy in a safe place. A very small safe.');
-add('import1', 'Time traveler', 'Import a save.', 'clock', 1, (g) => g.all.imports >= 1, 'Back from the future. Or the past. Hard to tell.');
-add('sell1', "Buyer's remorse", 'Sell a building.', 'cursor', 0, (g) => g.all.sold >= 1, 'It seemed like a good idea at the time.');
-add('sell100', 'Clearance sale', 'Sell <b>100</b> buildings.', 'cursor', 2, (g) => g.all.sold >= 100, 'Everything must go. Including the doorknob.');
+add('save1', 'Better safe than sorry', 'Save the game yourself.', 'disk', 0, (g) => g.all.saves >= 1, 'The game saves every thirty seconds, but you did not know that.');
+add('export1', 'Backup plan', 'Export your save.', 'disk', 1, (g) => g.all.exports >= 1, 'A copy in a safe place. A very small safe.');
+add('import1', 'Time traveler', 'Import a save.', 'disk', 1, (g) => g.all.imports >= 1, 'Back from the future. Or the past. Hard to tell.');
+add('sell1', "Buyer's remorse", 'Sell a building.', 'tag', 0, (g) => g.all.sold >= 1, 'It seemed like a good idea at the time.');
+add('sell100', 'Clearance sale', 'Sell <b>100</b> buildings.', 'tag', 2, (g) => g.all.sold >= 100, 'Everything must go. Including the doorknob.');
 add('night', 'Night owl', 'Play between midnight and 4 AM, your time.', 'moon', 0, (g, c) => c.hour < 4, 'It is, at this hour, very late. Even for a clock.');
 add('witching', 'The witching hour', 'Play within five minutes of midnight, your time.', 'moon', 2, (g, c) => c.hour === 0 && c.minute < 5, 'The real midnight. Do try not to die.');
-add('dawn', 'Early bird', 'Play between 5 and 7 AM, your time.', 'clock', 0, (g, c) => c.hour >= 5 && c.hour < 7, 'Catching the worm. And the schedule.');
+add('dawn', 'Early bird', 'Play between 5 and 7 AM, your time.', 'sun', 0, (g, c) => c.hour >= 5 && c.hour < 7, 'Catching the worm. And the schedule.');
 
 export const ACHIEVEMENTS = A;
 export const ACHIEVEMENT = Object.fromEntries(A.map((a) => [a.id, a]));
@@ -594,6 +594,15 @@ export function newsPool(g, sps) {
 // changelog
 // ====================================================================
 export const CHANGELOG = [
+  {
+    v: '0.4.0',
+    date: 'October 10, 2026',
+    notes: [
+      'All-new icons for buildings, upgrades and achievements: textured, earthy and a good deal moodier. Fewer candy colors.',
+      'Achievement pop-ups now come with their flavor text.',
+      'Buildings are <b>hidden</b> until you have held at least 60% of their price. The next one appears as a silhouette to tease it.',
+    ],
+  },
   {
     v: '0.3.1',
     date: 'October 10, 2026',

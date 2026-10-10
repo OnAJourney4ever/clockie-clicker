@@ -1,0 +1,17 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Icons sheet</title>
+<style>body{background:#4a2e1c;margin:6px;font:11px sans-serif;color:#fff}canvas{image-rendering:pixelated;margin:2px;vertical-align:top;background:#5a3a22}hr{border:0;border-top:1px solid #7a5a3a;margin:6px 0}</style>
+</head><body>
+<script type="module">
+import * as ART from '../js/art.js';
+import * as I from '../js/icons2.js';
+import { upscale } from '../js/pixel.js';
+const q = new URLSearchParams(location.search), k = +(q.get('k') || 2), only = q.get('only') || 'all';
+const assets = await ART.loadAssets(); I.setHand(assets.hand);
+const row = (title, list) => { if (only !== 'all' && !only.split(',').includes(title)) return; const h = document.createElement('div'); h.textContent = title; document.body.appendChild(h); for (const c of list) { const u = upscale(c, k); document.body.appendChild(u); } document.body.appendChild(document.createElement('hr')); };
+row('buildings', [...['cursor', 'nurse'].map(I.storeIcon), ...I.BUILDING_IDS.map(I.storeIcon)]);
+row('motifs', ['cursor', 'rapid', 'hourglass', 'bolt', 'clock', 'heart', 'moon', 'sun', 'news', 'disk', 'tag', 'gear', 'trophy', 'book', 'chart', 'scroll', 'eye', 'coin', 'house', 'wrench', 'zzz', 'star'].map((n) => I.achievementIcon(n, 2)));
+row('achievements', [I.achievementIcon('b:farm', 0), I.achievementIcon('b:mine', 1), I.achievementIcon('b:bank', 3), I.achievementIcon('hand', 2), I.achievementIcon('x', 0, true), I.achievementIcon('nurse', 4)]);
+row('upgrades', [I.upgradeIcon('cursor', 0), I.upgradeIcon('cursor', 3), I.upgradeIcon('nurse', 1), ...I.BUILDING_IDS.map((id, i) => I.upgradeIcon(id, i % 8))]);
+</script>
+</body></html>

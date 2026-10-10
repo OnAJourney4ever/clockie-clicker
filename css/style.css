@@ -268,6 +268,7 @@ textarea.saveBox {
 .note img { width: calc(var(--px) * 16); height: calc(var(--px) * 16); image-rendering: pixelated; flex: 0 0 auto; }
 .note .t { font-size: 11px; color: var(--gold); }
 .note .n { font-family: 'Kavoon', cursive; font-size: 17px; }
+.note .q { font-size: 11px; font-style: italic; color: #cbbf9e; margin-top: 2px; line-height: 1.35; }
 .note .x { position: absolute; top: 4px; right: 6px; width: 18px; height: 18px; border: none; background: transparent var(--tex-close) no-repeat center / contain; image-rendering: pixelated; }
 @keyframes noteIn { from { transform: translateY(20px); opacity: 0; } }
 
@@ -308,7 +309,7 @@ textarea.saveBox {
 
 .bItem {
   position: relative;
-  height: 66px;
+  height: 80px;
   display: flex; align-items: center;
   padding: 0 10px 0 8px;
   background: #6b4728 var(--tex-plank) repeat;
@@ -323,7 +324,7 @@ textarea.saveBox {
 .bItem:active { filter: brightness(0.95); }
 .bItem.disabled { filter: brightness(0.55) saturate(0.7); }
 .bItem.disabled:hover { filter: brightness(0.65) saturate(0.7); }
-.bIcon { width: calc(var(--px) * 16); height: calc(var(--px) * 16); image-rendering: pixelated; margin-right: 8px; filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.5)); }
+.bIcon { width: calc(var(--px) * 24); height: calc(var(--px) * 24); image-rendering: pixelated; margin-right: 8px; filter: drop-shadow(0 2px 0 rgba(0, 0, 0, 0.5)); }
 .bText { flex: 1 1 auto; min-width: 0; }
 .bName { font-family: 'Kavoon', cursive; font-size: 23px; line-height: 1.05; }
 .bCost { font-size: 13px; color: var(--good); text-shadow: 0 1px 0 #000; display: flex; align-items: center; gap: 4px; margin-top: 2px; }
@@ -391,3 +392,9 @@ body.dead #game { filter: grayscale(0.7) brightness(0.6); }
   .divider { flex: 0 0 calc(var(--px) * 4); }
   .menuBtn { width: 84px; font-size: 15px; }
 }
+
+/* structures that haven't been discovered yet */
+.bItem[hidden] { display: none; }
+.bItem.locked { cursor: default; }
+.bItem.locked .bIcon { filter: brightness(0); opacity: 0.55; }
+.bItem.locked .bName { color: #b9ad94; }
