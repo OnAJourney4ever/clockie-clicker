@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Clockie Clicker</title>
+  <meta name="description" content="It is one minute to midnight. Click the clock to wind it back.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Kavoon&family=Merriweather:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="icon" id="favicon" href="data:,">
+</head>
+<body>
+  <div id="topbar">
+    <div id="logo">Clockie Clicker</div>
+    <div id="topLinks"><span id="topVersion"></span></div>
+  </div>
+
+  <div id="game">
+    <section id="left">
+      <canvas id="clockCanvas"></canvas>
+      <div id="counter">
+        <div id="bankNum">60 seconds</div>
+        <div id="bankHuman">1 minute until midnight</div>
+        <div id="sps">per second: 0</div>
+      </div>
+      <div id="floaters"></div>
+      <div id="danger"></div>
+    </section>
+
+    <div class="divider"></div>
+
+    <section id="middle">
+      <div id="header">
+        <div class="btnCol">
+          <button class="menuBtn" data-menu="options">Options</button>
+          <button class="menuBtn" data-menu="stats">Stats</button>
+        </div>
+        <div id="news"><div id="newsText"></div></div>
+        <div class="btnCol">
+          <button class="menuBtn" data-menu="info">Info</button>
+          <button class="menuBtn" data-menu="mythos">Mythos</button>
+        </div>
+      </div>
+      <div id="rows">
+        <div id="rowsEmpty">Your staff will gather here.</div>
+      </div>
+      <div id="menu" hidden>
+        <button id="menuClose" class="closeBtn" aria-label="Close"></button>
+        <div id="menuContent"></div>
+      </div>
+      <div id="notes"></div>
+    </section>
+
+    <div class="divider"></div>
+
+    <section id="right">
+      <div class="storeTitle">Store</div>
+      <div class="sectionTitle">Upgrades</div>
+      <div id="upgrades"><div class="empty">No upgrades available&hellip; yet.</div></div>
+      <div class="sectionTitle">Buildings</div>
+      <div id="buyBar">
+        <div class="seg"><button data-mode="buy" class="on">Buy</button><button data-mode="sell">Sell</button></div>
+        <div class="seg"><button data-amt="1" class="on">1</button><button data-amt="10">10</button><button data-amt="100">100</button></div>
+      </div>
+      <div id="buildings"></div>
+    </section>
+  </div>
+
+  <div id="tooltip" hidden></div>
+
+  <div id="overlay" hidden>
+    <div id="overlayBox"></div>
+  </div>
+
+  <script type="module" src="js/game.js"></script>
+</body>
+</html>
